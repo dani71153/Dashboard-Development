@@ -28,3 +28,38 @@ nav a:focus {
   background: #2196F3;
   color: #fff;
 }
+
+
+
+.boton-grafica {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #e0e7ef;
+  color: #222;
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.boton-grafica.active,
+.boton-grafica:hover {
+  background: #2196F3;
+  color: #fff;
+}
+
+#graficas-odometro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+#graficas-odometro > div {
+  flex: 1 1 300px;
+}
+#graficas-unicas {
+  display: none;
+}

@@ -1,24 +1,22 @@
-feat(dashboard): Estructura e integración base de dashboard web con ROS2 y Chart.js
+feat(control): Mejoras robustas en control manual - tópico y frecuencia configurables, soporte TwistStamped
 
-- Añadida integración de roslibjs para conexión en tiempo real a rosbridge_server (puerto ws://localhost:9090)
-- Implementado indicador de estado en <aside> para visualizar:
-    - Estado de conexión a rosbridge (conectado/desconectado/error)
-    - Estado de recepción de datos en el tópico seleccionado
-- Añadido subscribe a /datos_grafica (std_msgs/Float32MultiArray), mostrando:
-    - Datos en consola y en el dashboard (JSON)
-    - Visualización gráfica en tiempo real usando Chart.js (conversión automática a pares x, y)
-- Estructura de HTML adaptada con sistema de navegación tipo pestañas (tabs) usando JS puro y hash en URL
-- Gestión de visibilidad de secciones y activación de pestañas en menú
-- Modularizado y comentado el archivo dashboard.js, con inicialización segura de todos los elementos tras DOMContentLoaded
-- CSS y HTML preparados para separar presentación, estructura y lógica (buenas prácticas)
-- Manejados casos de estado inicial, sin datos, reconexión y desconexión de ROS
-- Incluido <pre id="datos-ros"></pre> para mostrar datos crudos del tópico de ROS en la interfaz
+- Ahora los comandos de movimiento se publican en cualquier tópico configurable desde el dashboard (por defecto `/diff_drive_controller/cmd_vel`), sin editar el JS.
+- El tipo de mensaje es `geometry_msgs/TwistStamped`, compatible con controladores que requieren encabezado y tiempo.
+- Soporta edición y sincronización de sliders y cajas de texto para velocidades lineal y angular; valores limitados y siempre consistentes.
+- Permite elegir la frecuencia de publicación (1–30 Hz) para ajustar a hardware real y evitar saturar ROS.
+- Estado de publicación visible: muestra tópico, frecuencia y valores actuales enviados.
+- Todos los controles y entradas se bloquean automáticamente si ROS se desconecta, previniendo comandos inválidos.
+- Soporte para teclas rápidas WASD y espacio para control directo desde el teclado.
+- Modularidad: código preparado para cambiar fácilmente a otros tipos de mensaje si algún robot lo requiere.
 
-Notas:
-- Para agregar más tópicos, solo extender lógica de listener en dashboard.js
-- Requiere tener rosbridge_server corriendo en ROS2 Jazzy y tener publicado /datos_grafica
-- La visualización del gráfico usa Chart.js tipo 'line' para datos XY, pero puede adaptarse a otros tipos según necesidades
-- Todo el sistema funciona sin frameworks externos, solo JS, HTML, CSS, Chart.js y roslibjs
+---
 
-BREAKING CHANGE:
-Estructura base lista para crecer a futuro con más secciones y nuevos tópicos ROS. Todos los cambios probados y funcionales.
+feat(nodos): Visualización y consulta avanzada de nodos y tópicos ROS con comandos dinámicos
+
+- Ahora el dashboard muestra todos los tópicos y nodos en columnas separadas, con actualización manual o automática al cambiar de pestaña.
+- Agregados dropdowns para seleccionar cualquier nodo o tópico y consultar info detallada usando los comandos de ROSBridge (`info`, `publishers`, `subscribers`, `node_topics`, `topic_type`).
+- Resultados de las consultas aparecen en tiempo real, sin recargar la página.
+- El dashboard deshabilita o limpia las listas y los comandos si ROS está desconectado o no responde.
+- Errores y estados se muestran de forma clara y explícita para mejor UX.
+- Código estructurado para fácil extensión y mantenimiento.
+

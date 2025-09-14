@@ -12,7 +12,7 @@
   <nav>
     <ul>
       <li><a href="#graficas" data-tab="graficas">Gráficas</a></li>
-      <li><a href="#nodos" data-tab="nodos">Nodos</a></li>
+      <li><a href="#nodos_topicos" data-tab="nodos">Nodos</a></li>
       <li><a href="#control" data-tab="control">Control</a></li>
       <li><a href="#urdf" data-tab="urdf">URDF</a></li>
       <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
@@ -26,20 +26,98 @@
   <main>
     <section id="graficas">
       <h2>Visualización de Gráficas</h2>
-      <div id="contenedor-graficas">
+      <div style="display: flex; gap: 2rem;">
+        <aside id="aside-graficas" style="min-width: 160px;">
+          <h3>Conjuntos de gráficas</h3>
+          <button class="boton-grafica" data-tipo="odometro">Odómetro</button>
+          <button class="boton-grafica" data-tipo="imu">IMU</button>
+          <button class="boton-grafica" data-tipo="motores">Motores</button>
+          <button class="boton-grafica" data-tipo="bateria">Batería</button>
+          <button class="boton-grafica" data-tipo="temperatura">Temperatura</button>
+        </aside>
+        <div id="contenedor-graficas">
           <canvas id="miGrafica"></canvas>
           <pre id="datos-ros"></pre>
-
+        </div>
       </div>
     </section>
-    <section id="nodos">
-      <h2>Visualización de Nodos</h2>
-      <div id="contenedor-nodos"></div>
+    
+    <section id="nodos_topicos">
+      <h2>Nodos y Tópicos ROS</h2>
+      <button id="btn-actualizar-nodos-topicos" style="margin-bottom:1em;">Actualizar</button>
+      <div style="display:flex; gap:2em;">
+        <div style="flex:1;">
+          <h3>Tópicos</h3>
+          <div id="contenedor-topicos"></div>
+        </div>
+        <div style="flex:1;">
+          <h3>Nodos</h3>
+          <div id="contenedor-nodos"></div>
+        </div>
+        <div style="flex:1; min-width:220px;">
+          <h3>Consulta de Información</h3>
+          <select id="dropdown-seleccion" style="width:100%; margin-bottom:0.8em;">
+            <option value="" disabled selected>Selecciona nodo o tópico</option>
+          </select>
+          <select id="dropdown-comando">
+            <option value="" disabled selected>Selecciona comando</option>
+            <option value="info">Info</option>
+            <option value="publishers">Publishers</option>
+            <option value="subscribers">Subscribers</option>
+            <option value="node_topics">Node Topics</option>
+            <option value="topic_type">Topic Type</option>
+            <option value="topic_types">All Topic Types</option>
+            <option value="services">Servicios</option>
+            <option value="service_type">Service Type</option>
+          </select>
+          <div id="resultado-comando" style="font-family:monospace; font-size:1em; background:#f5f6fa; min-height:80px; padding:8px 10px; border-radius:6px;"></div>
+        </div>
+      </div>
     </section>
+    
+    
     <section id="control">
-      <h2>Control del Robot</h2>
-      <div id="panel-control"></div>
+      <h2>Control Manual</h2>
+      <div style="margin-bottom:1em;">
+        <label for="topic-select"><b>Tópico de Control:</b></label>
+        <input type="text" id="topic-select" value="/cmd_vel" style="width: 140px;">
+        <label for="publish-rate"><b>Frecuencia (Hz):</b></label>
+        <input type="number" id="publish-rate" min="1" max="30" value="10" style="width: 60px;">
+        <span id="current-topic" style="color: #666; font-size: 0.95em;"></span>
+      </div>
+      <div style="display:flex; gap:2em; align-items: flex-start;">
+        <div style="display:grid; grid-template-areas: 
+            'fwd fwd'
+            'left right'
+            'back back'
+            'stop stop'; gap:0.5em; align-items:center;">
+          <button id="btn-forward"  style="grid-area:fwd;">▲ Adelante</button>
+          <button id="btn-left"     style="grid-area:left;">◀️ Giro Antihorario</button>
+          <button id="btn-right"    style="grid-area:right;">▶️ Giro Horario</button>
+          <button id="btn-back"     style="grid-area:back;">▼ Atrás</button>
+          <button id="btn-stop"     style="grid-area:stop;">⏹️ Parar</button>
+        </div>
+        <div>
+          <label>Velocidad Lineal (m/s):</label><br>
+          <input type="range" id="slider-linear" min="-0.11" max="0.11" step="0.01" value="0.05" style="width:120px;">
+          <input type="number" id="input-linear" min="-0.11" max="0.11" step="0.01" value="0.05" style="width:55px;">
+          <br><br>
+          <label>Velocidad Angular (rad/s):</label><br>
+          <input type="range" id="slider-angular" min="-0.45" max="0.45" step="0.01" value="0.2" style="width:120px;">
+          <input type="number" id="input-angular" min="-0.45" max="0.45" step="0.01" value="0.2" style="width:55px;">
+          <br><br>
+          <small>Puedes usar también teclas <b>W/A/S/D</b> para mover, <b>Espacio</b> para parar.</small>
+          <div id="control-status" style="margin-top:0.5em;color:#c00;font-size:0.96em;"></div>
+        </div>
+      </div>
+      <div style="margin-top:1em; font-size:0.97em;">
+        <b>Estado de publicación:</b>
+        <span id="pub-status" style="color:#666;"></span>
+      </div>
     </section>
+    
+
+
     <section id="urdf">
       <h2>URDF del Robot</h2>
       <div id="visualizador-urdf"></div>
