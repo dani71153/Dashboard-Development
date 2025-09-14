@@ -1,0 +1,30 @@
+section {
+  display: none;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+}
+
+nav li {
+  display: inline;
+}
+
+nav a {
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  background: #eaeaea;
+  color: #222;
+  font-weight: bold;
+}
+
+nav a.active,
+nav a:hover,
+nav a:focus {
+  background: #2196F3;
+  color: #fff;
+}

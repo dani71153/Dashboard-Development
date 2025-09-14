@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Robot</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+  <nav>
+    <ul>
+      <li><a href="#graficas" data-tab="graficas">Gráficas</a></li>
+      <li><a href="#nodos" data-tab="nodos">Nodos</a></li>
+      <li><a href="#control" data-tab="control">Control</a></li>
+      <li><a href="#urdf" data-tab="urdf">URDF</a></li>
+      <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
+    </ul>
+  </nav>
+  <main>
+    <section id="graficas">
+      <h2>Visualización de Gráficas</h2>
+      <div id="contenedor-graficas">
+          <canvas id="miGrafica"></canvas>
+      </div>
+    </section>
+    <section id="nodos">
+      <h2>Visualización de Nodos</h2>
+      <div id="contenedor-nodos"></div>
+    </section>
+    <section id="control">
+      <h2>Control del Robot</h2>
+      <div id="panel-control"></div>
+    </section>
+    <section id="urdf">
+      <h2>URDF del Robot</h2>
+      <div id="visualizador-urdf"></div>
+    </section>
+    <section id="mapa">
+      <h2>Visualización del Mapa</h2>
+      <div id="visualizador-mapa"></div>
+    </section>
+  </main>
+  <script src="dashboard.js"></script>
+</body>
+</html>
