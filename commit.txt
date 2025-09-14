@@ -1,0 +1,24 @@
+feat(dashboard): Estructura e integración base de dashboard web con ROS2 y Chart.js
+
+- Añadida integración de roslibjs para conexión en tiempo real a rosbridge_server (puerto ws://localhost:9090)
+- Implementado indicador de estado en <aside> para visualizar:
+    - Estado de conexión a rosbridge (conectado/desconectado/error)
+    - Estado de recepción de datos en el tópico seleccionado
+- Añadido subscribe a /datos_grafica (std_msgs/Float32MultiArray), mostrando:
+    - Datos en consola y en el dashboard (JSON)
+    - Visualización gráfica en tiempo real usando Chart.js (conversión automática a pares x, y)
+- Estructura de HTML adaptada con sistema de navegación tipo pestañas (tabs) usando JS puro y hash en URL
+- Gestión de visibilidad de secciones y activación de pestañas en menú
+- Modularizado y comentado el archivo dashboard.js, con inicialización segura de todos los elementos tras DOMContentLoaded
+- CSS y HTML preparados para separar presentación, estructura y lógica (buenas prácticas)
+- Manejados casos de estado inicial, sin datos, reconexión y desconexión de ROS
+- Incluido <pre id="datos-ros"></pre> para mostrar datos crudos del tópico de ROS en la interfaz
+
+Notas:
+- Para agregar más tópicos, solo extender lógica de listener en dashboard.js
+- Requiere tener rosbridge_server corriendo en ROS2 Jazzy y tener publicado /datos_grafica
+- La visualización del gráfico usa Chart.js tipo 'line' para datos XY, pero puede adaptarse a otros tipos según necesidades
+- Todo el sistema funciona sin frameworks externos, solo JS, HTML, CSS, Chart.js y roslibjs
+
+BREAKING CHANGE:
+Estructura base lista para crecer a futuro con más secciones y nuevos tópicos ROS. Todos los cambios probados y funcionales.

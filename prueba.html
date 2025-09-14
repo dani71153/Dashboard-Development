@@ -5,6 +5,7 @@
   <title>Dashboard Robot</title>
   <link rel="stylesheet" href="dashboard.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
 
 </head>
 <body>
@@ -17,11 +18,18 @@
       <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
     </ul>
   </nav>
+  <aside id="estado-ros">
+    <span id="ros-status">🔴 Desconectado</span>
+    <span id="topic-status">—</span>
+  </aside>
+  
   <main>
     <section id="graficas">
       <h2>Visualización de Gráficas</h2>
       <div id="contenedor-graficas">
           <canvas id="miGrafica"></canvas>
+          <pre id="datos-ros"></pre>
+
       </div>
     </section>
     <section id="nodos">

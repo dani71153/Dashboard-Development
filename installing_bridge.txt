@@ -1,0 +1,14 @@
+feat(rosbridge): Instalación de rosbridge_server y dependencias Python faltantes para ROS2 Jazzy
+
+- Instalado rosbridge_server para exponer tópicos ROS2 vía WebSocket:
+    sudo apt update
+    sudo apt install ros-jazzy-rosbridge-server
+
+- Instaladas dependencias Python necesarias según errores detectados:
+    pip3 install bson pymongo argcomplete
+
+Notas:
+- bson: requerido por rosbridge para conversión de mensajes.
+- pymongo: incluye módulo bson, refuerza compatibilidad.
+- argcomplete: requerido por rosapi_node para autocompletado.
+- Todas las dependencias instaladas en el entorno Python 3.12 utilizado por ROS2 Jazzy.
