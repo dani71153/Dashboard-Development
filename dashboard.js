@@ -7,6 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const topicStatus = document.getElementById('topic-status');
   const datosRos = document.getElementById('datos-ros');
 
+
+  if (window.Chart && window['chartjsPluginAnnotation']) {
+    Chart.register(window['chartjsPluginAnnotation']);
+  }
+  
+  
   if (rosStatus) rosStatus.textContent = '🔴 Desconectado';
   if (topicStatus) topicStatus.textContent = '—';
 
@@ -527,5 +533,222 @@ window.addEventListener('keydown', (e) => {
     case ' ': setTwist(0, 0); break;
   }
 });
+
+// ======================= Parámetros =======================
+const RADIO_RUEDA = 0.029;
+const VEL_MAX_MS = 0.11;
+const VEL_MIN_MS = -0.11;
+const nombresRuedas = [
+  'joint_wheel_1',
+  'joint_wheel_2',
+  'joint_wheel_3',
+  'joint_wheel_4'
+];
+const chartsRuedas = [];
+let tiempoInicio = null;
+
+const divStats = document.getElementById('odometria-stats');
+if (divStats) divStats.innerHTML = "<b>Esperando datos...</b>";
+
+// Paleta de colores para los valores
+function colorValor(val) {
+  if (Math.abs(val) > Math.abs(VEL_MAX_MS)) return '#d22'; // rojo fuerte fuera de rango
+  if (Math.abs(val) > 0.8 * Math.abs(VEL_MAX_MS)) return '#fa0'; // naranja advertencia
+  if (Math.abs(val) > 0.5 * Math.abs(VEL_MAX_MS)) return '#3a7'; // verde medio
+  return '#08d'; // azul (seguro)
+}
+
+// Inicializar gráficas (con Chart.js)
+for (let i = 1; i <= 4; i++) {
+  const canvas = document.getElementById(`grafica-rueda-${i}`);
+  if (canvas) {
+    chartsRuedas.push(new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: `Rueda ${i} (m/s)`,
+          data: [],
+          borderWidth: 2,
+          borderColor: '#2987d6',
+          pointRadius: 1,
+        }]
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        scales: {
+          x: { title: { display: true, text: 'Tiempo (s)' } },
+          y: {
+            title: { display: true, text: 'Velocidad (m/s)' },
+            min: VEL_MIN_MS * 1.2,
+            max: VEL_MAX_MS * 1.2
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          annotation: {
+            annotations: {
+              maxVel: {
+                type: 'line',
+                yMin: VEL_MAX_MS,
+                yMax: VEL_MAX_MS,
+                borderColor: 'red',
+                borderWidth: 2,
+                borderDash: [4, 4],
+                label: {
+                  display: true, content: 'Máx', color: 'red', position: 'end',
+                  font: { size: 11 }
+                }
+              },
+              minVel: {
+                type: 'line',
+                yMin: VEL_MIN_MS,
+                yMax: VEL_MIN_MS,
+                borderColor: 'red',
+                borderWidth: 2,
+                borderDash: [4, 4],
+                label: {
+                  display: true, content: 'Mín', color: 'red', position: 'end',
+                  font: { size: 11 }
+                }
+              }
+            }
+          }
+        }
+      }
+    }));
+  }
+}
+
+// Listener para /joint_states
+const jointStatesListener = new ROSLIB.Topic({
+  ros: ros,
+  name: '/joint_states',
+  messageType: 'sensor_msgs/JointState'
+});
+
+jointStatesListener.subscribe(function(msg) {
+  if (!tiempoInicio) tiempoInicio = Date.now();
+  const tiempo = ((Date.now() - tiempoInicio) / 1000).toFixed(1);
+  let allVals = [];
+  let detalles = [];
+
+  nombresRuedas.forEach((nombreRueda, idx) => {
+    const index = msg.name.indexOf(nombreRueda);
+    if (index >= 0 && msg.velocity && msg.velocity[index] !== undefined && chartsRuedas[idx]) {
+      // Convertir a m/s
+      const valMS = msg.velocity[index] * RADIO_RUEDA;
+      allVals.push(valMS);
+
+      const chart = chartsRuedas[idx];
+      chart.data.labels.push(tiempo);
+      chart.data.datasets[0].data.push(valMS);
+      if (chart.data.labels.length > 50) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update();
+
+      // Estadísticas por rueda (últimos 20)
+      const last = chart.data.datasets[0].data.slice(-20);
+      const vmax = Math.max(...last).toFixed(3);
+      const vmin = Math.min(...last).toFixed(3);
+      const vavg = (last.reduce((a, b) => a + b, 0) / last.length).toFixed(3);
+
+      detalles.push(
+        `<div style="margin-bottom:0.5em;">
+          <b style="color:#2987d6;">Rueda ${idx+1}</b><br>
+          <span style="color:${colorValor(vmax)}">Max:</span> ${vmax}<br>
+          <span style="color:${colorValor(vmin)}">Min:</span> ${vmin}<br>
+          <span style="color:${colorValor(vavg)}">Prom:</span> ${vavg}
+        </div>`
+      );
+    }
+  });
+
+  // Estadística global
+  if (divStats && allVals.length) {
+    const max = Math.max(...allVals).toFixed(3);
+    const min = Math.min(...allVals).toFixed(3);
+    const avg = (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(3);
+    divStats.innerHTML =
+      `<b>Resumen global</b><br>
+      <span style="color:${colorValor(max)};">Máx: ${max}</span> m/s<br>
+      <span style="color:${colorValor(min)};">Mín: ${min}</span> m/s<br>
+      <span style="color:${colorValor(avg)};">Promedio: ${avg}</span> m/s
+      <hr style="margin:0.5em 0;">
+      ${detalles.join('')}`;
+  }
+});
+
+// Mostrar/ocultar gráficas
+const botonesGraficas = document.querySelectorAll('.boton-grafica');
+const divGraficasOdometro = document.getElementById('graficas-odometro');
+const divGraficasUnicas = document.getElementById('graficas-unicas');
+if (divGraficasOdometro && divGraficasUnicas && botonesGraficas.length > 0) {
+  botonesGraficas.forEach(boton => {
+    boton.addEventListener('click', function() {
+      botonesGraficas.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const tipo = this.dataset.tipo;
+      if (tipo === "odometro") {
+        divGraficasOdometro.style.display = "flex";
+        divGraficasUnicas.style.display = "none";
+      } else {
+        divGraficasOdometro.style.display = "none";
+        divGraficasUnicas.style.display = "block";
+      }
+    });
+  });
+}
+
+// Límites de odometría: inputs y switches
+const inputMaxVel = document.getElementById('input-max-vel');
+const inputMinVel = document.getElementById('input-min-vel');
+const toggleMaxLine = document.getElementById('toggle-maxline');
+const toggleMinLine = document.getElementById('toggle-minline');
+function updateOdometryLimits() {
+  const maxVel = parseFloat(inputMaxVel.value);
+  const minVel = parseFloat(inputMinVel.value);
+  const showMax = toggleMaxLine.checked;
+  const showMin = toggleMinLine.checked;
+  for (const chart of chartsRuedas) {
+    // Línea máxima
+    if (showMax) {
+      chart.options.plugins.annotation.annotations.maxVel = {
+        type: 'line', yMin: maxVel, yMax: maxVel, borderColor: 'red',
+        borderWidth: 2, borderDash: [4, 4],
+        label: { display: true, content: 'Máx', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    } else {
+      delete chart.options.plugins.annotation.annotations.maxVel;
+    }
+    // Línea mínima
+    if (showMin) {
+      chart.options.plugins.annotation.annotations.minVel = {
+        type: 'line', yMin: minVel, yMax: minVel, borderColor: 'red',
+        borderWidth: 2, borderDash: [4, 4],
+        label: { display: true, content: 'Mín', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    } else {
+      delete chart.options.plugins.annotation.annotations.minVel;
+    }
+    // Ajuste de eje Y (opcional)
+    chart.options.scales.y.max = showMax ? maxVel * 1.2 : undefined;
+    chart.options.scales.y.min = showMin ? minVel * 1.2 : undefined;
+    chart.update();
+  }
+}
+if (inputMaxVel) inputMaxVel.addEventListener('input', updateOdometryLimits);
+if (inputMinVel) inputMinVel.addEventListener('input', updateOdometryLimits);
+if (toggleMaxLine) toggleMaxLine.addEventListener('change', updateOdometryLimits);
+if (toggleMinLine) toggleMinLine.addEventListener('change', updateOdometryLimits);
+updateOdometryLimits();
+
+//Odometria final
+
+
+
 
 });

@@ -5,7 +5,16 @@
   <title>Dashboard Robot</title>
   <link rel="stylesheet" href="dashboard.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
+
+  <!--Zona de Librerias de Visualizacion 3D-->
+  <!-- Pon esto en el <head> de tu dashboard o en la pestaña/sección 3D -->
+<script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/umd/eventemitter2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ros3d/build/ros3d.min.js"></script>
+<!-- Usa estos CDNs modernos y compatibles -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
 
 </head>
 <body>
@@ -36,9 +45,63 @@
           <button class="boton-grafica" data-tipo="temperatura">Temperatura</button>
         </aside>
         <div id="contenedor-graficas">
-          <canvas id="miGrafica"></canvas>
-          <pre id="datos-ros"></pre>
+          <!-- Un solo div visible a la vez, según el conjunto seleccionado -->
+          <div id="graficas-odometro" style="display:none;gap:2rem;flex-wrap:wrap;">
+            <div>
+              <canvas id="grafica-rueda-1" width="350" height="160"></canvas>
+              <div style="text-align:center">Rueda 1</div>
+            </div>
+            <div>
+              <canvas id="grafica-rueda-2" width="350" height="160"></canvas>
+              <div style="text-align:center">Rueda 2</div>
+            </div>
+            <div>
+              <canvas id="grafica-rueda-3" width="350" height="160"></canvas>
+              <div style="text-align:center">Rueda 3</div>
+            </div>
+            <div>
+              <canvas id="grafica-rueda-4" width="350" height="160"></canvas>
+              <div style="text-align:center">Rueda 4</div>
+            </div>
+            <div id="odometria-stats">
+              <b>Resumen global<br>(últimos <span id="stat-hist-n"></span> muestras por rueda)</b><br>
+              <span id="stat-max-block" style="color:#08d;">Máx: <span id="stat-max"></span></span> m/s<br>
+              <span id="stat-min-block" style="color:#08d;">Mín: <span id="stat-min"></span></span> m/s<br>
+              <span id="stat-avg-block" style="color:#08d;">Promedio: <span id="stat-avg"></span></span> m/s
+              <hr style="margin:0.5em 0;">
+              <div id="stats-detalles">
+                <span id="detalle-rueda-1"></span>
+                <span id="detalle-rueda-2"></span>
+                <span id="detalle-rueda-3"></span>
+                <span id="detalle-rueda-4"></span>
+              </div>
+            </div>
+                        <div id="controles-odometro" style="display:flex; flex-direction:column; gap:0.5em; margin-left:1.5em;">
+              <label>
+                <b>Velocidad Máx (m/s):</b>
+                <input id="input-max-vel" type="number" min="0" max="1" step="0.01" value="0.11" style="width: 60px;">
+              </label>
+              <label>
+                <b>Velocidad Mín (m/s):</b>
+                <input id="input-min-vel" type="number" min="-1" max="0" step="0.01" value="-0.11" style="width: 60px;">
+              </label>
+              <label>
+                <input id="toggle-maxline" type="checkbox" checked>
+                Mostrar línea máxima
+              </label>
+              <label>
+                <input id="toggle-minline" type="checkbox" checked>
+                Mostrar línea mínima
+              </label>
+            </div>
+            
+          </div>
+          <div id="graficas-unicas" style="">
+            <canvas id="miGrafica"></canvas>
+            <pre id="datos-ros"></pre>
+          </div>
         </div>
+        
       </div>
     </section>
     
@@ -74,13 +137,13 @@
         </div>
       </div>
     </section>
-    
+
     
     <section id="control">
       <h2>Control Manual</h2>
       <div style="margin-bottom:1em;">
         <label for="topic-select"><b>Tópico de Control:</b></label>
-        <input type="text" id="topic-select" value="/cmd_vel" style="width: 140px;">
+        <input type="text" id="topic-select" value="/diff_drive_controller/cmd_vel" style="width: 140px;">
         <label for="publish-rate"><b>Frecuencia (Hz):</b></label>
         <input type="number" id="publish-rate" min="1" max="30" value="10" style="width: 60px;">
         <span id="current-topic" style="color: #666; font-size: 0.95em;"></span>
@@ -109,6 +172,41 @@
           <small>Puedes usar también teclas <b>W/A/S/D</b> para mover, <b>Espacio</b> para parar.</small>
           <div id="control-status" style="margin-top:0.5em;color:#c00;font-size:0.96em;"></div>
         </div>
+        <div id="gamepad-container" style="position:relative;width:320px;height:150px;background:#232;border-radius:16px;box-shadow:0 2px 8px #0004;overflow:hidden;">
+          <!-- Puedes usar tu imagen favorita aquí: -->
+          <img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Xbox360-controller.png"
+            style="position:absolute;width:320px;height:150px;opacity:0.35;left:0;top:0;">
+          <!-- Sticks -->
+          <div style="position:absolute;left:56px;top:78px;color:#0cf;font-size:1em;">
+            LS: (<span id="ls-x">0</span>, <span id="ls-y">0</span>)
+          </div>
+          <div style="position:absolute;left:185px;top:105px;color:#fc0;font-size:1em;">
+            RS: (<span id="rs-x">0</span>, <span id="rs-y">0</span>)
+          </div>
+          <!-- Triggers -->
+          <div style="position:absolute;left:30px;top:10px;color:#0f0;font-size:0.97em;">
+            LT: <span id="lt">0</span>
+          </div>
+          <div style="position:absolute;left:240px;top:10px;color:#0f0;font-size:0.97em;">
+            RT: <span id="rt">0</span>
+          </div>
+          <!-- Botones principales (ejemplo) -->
+          <div style="position:absolute;left:255px;top:50px;">
+            <span id="btn-a" style="background:#0f0;border-radius:50%;padding:2px 7px 2px 7px;color:#000;"></span>
+          </div>
+          <div style="position:absolute;left:265px;top:35px;">
+            <span id="btn-b" style="background:#f00;border-radius:50%;padding:2px 7px 2px 7px;color:#fff;"></span>
+          </div>
+          <div style="position:absolute;left:240px;top:30px;">
+            <span id="btn-x" style="background:#00f;border-radius:50%;padding:2px 7px 2px 7px;color:#fff;"></span>
+          </div>
+          <div style="position:absolute;left:225px;top:40px;">
+            <span id="btn-y" style="background:#ff0;border-radius:50%;padding:2px 7px 2px 7px;color:#000;"></span>
+          </div>
+          <div style="position:absolute;left:150px;top:130px;color:#fff;font-size:0.92em;">
+            <span id="gamepad-status" style="color:#ff4;">Sin gamepad</span>
+          </div>
+        </div>
       </div>
       <div style="margin-top:1em; font-size:0.97em;">
         <b>Estado de publicación:</b>
@@ -117,11 +215,13 @@
     </section>
     
 
-
     <section id="urdf">
       <h2>URDF del Robot</h2>
       <div id="visualizador-urdf"></div>
+      <div id="visualizador3d" style="width:100%; height:500px; background:#222; border-radius:10px;"></div>
+
     </section>
+
     <section id="mapa">
       <h2>Visualización del Mapa</h2>
       <div id="visualizador-mapa"></div>
