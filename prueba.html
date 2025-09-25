@@ -44,6 +44,8 @@
           <button class="boton-grafica" data-tipo="motores">Motores</button>
           <button class="boton-grafica" data-tipo="bateria">Batería</button>
           <button class="boton-grafica" data-tipo="temperatura">Temperatura</button>
+          <button class="boton-grafica" data-tipo="mpu">MPU</button>
+
         </aside>
         <div id="contenedor-graficas">
           <!-- Un solo div visible a la vez, según el conjunto seleccionado -->
@@ -156,8 +158,99 @@
             </div>
           </div>
           
-
-
+          <div id="graficas-motores" style="display:none;gap:2rem;flex-wrap:wrap;">
+            <div>
+              <canvas id="grafica-corriente-1" width="350" height="160"></canvas>
+              <div style="text-align:center">Motor 1</div>
+            </div>
+            <div>
+              <canvas id="grafica-corriente-2" width="350" height="160"></canvas>
+              <div style="text-align:center">Motor 2</div>
+            </div>
+            <div>
+              <canvas id="grafica-corriente-3" width="350" height="160"></canvas>
+              <div style="text-align:center">Motor 3</div>
+            </div>
+            <div>
+              <canvas id="grafica-corriente-4" width="350" height="160"></canvas>
+              <div style="text-align:center">Motor 4</div>
+            </div>
+            <div id="corriente-stats">
+              <!-- Las estadísticas y controles de offset se llenan por JS -->
+            </div>
+            <div id="controles-motores" style="display:flex; flex-direction:column; gap:0.5em; margin-left:1.5em;">
+              <label>
+                <b>Corriente Máx (A):</b>
+                <input id="input-max-corr" type="number" step="0.01" value="4.5" style="width: 80px;">
+              </label>
+              <label>
+                <b>Corriente Mín (A):</b>
+                <input id="input-min-corr" type="number" step="0.01" value="0" style="width: 80px;">
+              </label>
+              <label>
+                <input id="toggle-maxline-corr" type="checkbox" checked>
+                Mostrar línea máxima
+              </label>
+              <label>
+                <input id="toggle-minline-corr" type="checkbox" checked>
+                Mostrar línea mínima
+              </label>
+            </div>
+            
+          </div>
+          
+          <div id="graficas-mpu" style="display:none;gap:2rem;flex-wrap:wrap;">
+            <div>
+              <canvas id="grafica-aceleracion" width="340" height="150"></canvas>
+              <div style="text-align:center;">Aceleración lineal (m/s²)</div>
+            </div>
+            <div>
+              <canvas id="grafica-giroscopio" width="340" height="150"></canvas>
+              <div style="text-align:center;">Velocidad angular (rad/s)</div>
+            </div>
+            <div>
+              <canvas id="grafica-orientacion" width="340" height="150"></canvas>
+              <div style="text-align:center;">Orientación (Euler °)</div>
+            </div>
+            <div id="mpu-stats"></div>
+            <div id="controles-mpu" style="display:flex; flex-direction:column; gap:0.5em; min-width:220px;">
+              <label>
+                <b>Máx (acel m/s²):</b>
+                <input id="input-max-acel" type="number" step="0.1" value="20" style="width:70px;">
+              </label>
+              <label>
+                <b>Mín (acel m/s²):</b>
+                <input id="input-min-acel" type="number" step="0.1" value="-20" style="width:70px;">
+              </label>
+              <label>
+                <input id="toggle-maxline-acel" type="checkbox" checked>
+                Mostrar línea máxima
+              </label>
+              <label>
+                <input id="toggle-minline-acel" type="checkbox" checked>
+                Mostrar línea mínima
+              </label>
+              <hr style="margin:0.6em 0;">
+              <label>
+                <b>Máx (gyro rad/s):</b>
+                <input id="input-max-gyro" type="number" step="0.1" value="10" style="width:70px;">
+              </label>
+              <label>
+                <b>Mín (gyro rad/s):</b>
+                <input id="input-min-gyro" type="number" step="0.1" value="-10" style="width:70px;">
+              </label>
+              <label>
+                <input id="toggle-maxline-gyro" type="checkbox" checked>
+                Mostrar línea máxima
+              </label>
+              <label>
+                <input id="toggle-minline-gyro" type="checkbox" checked>
+                Mostrar línea mínima
+              </label>
+            </div>
+            
+          </div>
+          
           <div id="graficas-unicas" style="">
             <canvas id="miGrafica"></canvas>
             <pre id="datos-ros"></pre>
@@ -195,8 +288,10 @@
             <option value="services">Servicios</option>
             <option value="service_type">Service Type</option>
           </select>
-          <div id="resultado-comando" style="font-family:monospace; font-size:1em; background:#f5f6fa; min-height:80px; padding:8px 10px; border-radius:6px;"></div>
-          <div id="monitor-dinamico" style="margin-top:2em;">
+          <button id="btn-consultar-comando" style="margin-bottom:0.7em;">Consultar</button>
+          <div id="resultado-comando" 
+          style="font-family:monospace; font-size:1em; background:#f5f6fa; min-height:80px; padding:8px 10px; border-radius:6px; color:#111;"></div>
+      <div id="monitor-dinamico" style="margin-top:2em;">
             <h3>Monitor de Tópicos en Tiempo Real</h3>
             <div style="display:flex; gap:1em;">
               <div>
@@ -303,7 +398,7 @@
     </section>
 
     <section id="monitoreo" style="display:none;">
-      <!-- <h2>Monitoreo de Tópicos en Tiempo Real</h2>
+      <h2>Monitoreo de Tópicos en Tiempo Real</h2>
       <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 0.7em;">
         <label for="monit-dropdown-topico"><b>Selecciona Tópico:</b></label>
         <select id="monit-dropdown-topico" style="min-width:220px;"></select>
@@ -313,31 +408,7 @@
         <span id="monit-frecuencia-texto" style="color:#888; font-size:0.95em;">(default: 3 Hz)</span>
       </div>
       
-      <div id="monit-lista-topicos" style="margin-top:1.5em;"></div> -->
-      <div id="monit-lista-topicos">
-        <!-- Primera consola (joint_states) -->
-        <div class="monit-fila">
-          <b style="color:#2987d6;">/joint_states</b>
-          <span style="color:#888;">(sensor_msgs/msg/JointState)</span>
-          <button class="monit-remove-btn">✖</button>
-          <pre> ... datos JSON ... </pre>
-        </div>
-        <!-- Segunda consola (imu/data) -->
-        <div class="monit-fila">
-          <b style="color:#2987d6;">/imu/data</b>
-          <span style="color:#888;">(sensor_msgs/msg/Imu)</span>
-          <button class="monit-remove-btn">✖</button>
-          <pre> ... datos JSON ... </pre>
-        </div>
-        <!-- Tercera consola (odom) -->
-        <div class="monit-fila">
-          <b style="color:#2987d6;">/odom</b>
-          <span style="color:#888;">(nav_msgs/msg/Odometry)</span>
-          <button class="monit-remove-btn">✖</button>
-          <pre> ... datos JSON ... </pre>
-        </div>
-      </div>
-      
+      <div id="monit-lista-topicos" style="margin-top:1.5em;"></div>
           </section>
     
   </main>

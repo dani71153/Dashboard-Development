@@ -141,222 +141,188 @@ navLinks.forEach(link => {
 window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', handleHashChange);
 
-  // ========================
-  // 5. Visualización de Nodos y Tópicos ROS
-  // ========================
-  const contenedorNodos = document.getElementById('contenedor-nodos');
-  const contenedorTopicos = document.getElementById('contenedor-topicos');
-  const btnActualizar = document.getElementById('btn-actualizar-nodos-topicos');
+// ========================
+// 5. Visualización de Nodos y Tópicos ROS
+// ========================
+const contenedorNodos = document.getElementById('contenedor-nodos');
+const contenedorTopicos = document.getElementById('contenedor-topicos');
+const btnActualizar = document.getElementById('btn-actualizar-nodos-topicos');
+const dropdownSeleccion = document.getElementById('dropdown-seleccion');
+const dropdownComando = document.getElementById('dropdown-comando');
+const resultadoComando = document.getElementById('resultado-comando');
+const btnConsultar = document.getElementById('btn-consultar-comando');
 
-  function actualizarListaNodos() {
-    if (!ros.isConnected) {
-      contenedorNodos.innerHTML = '<div style="color:#888;">No conectado a ROS</div>';
-      return;
-    }
-    const service = new ROSLIB.Service({
-      ros: ros,
-      name: '/rosapi/nodes',
-      serviceType: 'rosapi/GetNodes'
-    });
-    service.callService(new ROSLIB.ServiceRequest({}), function(result) {
-      if (result.nodes && result.nodes.length > 0) {
-        contenedorNodos.innerHTML =
-          `<ul style="font-family:monospace; font-size:1.08em; padding-left:1em; margin:0;">
-            ${result.nodes.map(nodo => `<li>${nodo}</li>`).join('')}
-          </ul>`;
-      } else {
-        contenedorNodos.innerHTML = '<div style="color:#888;">No hay nodos activos.</div>';
-      }
-    }, function(error) {
-      contenedorNodos.innerHTML = '<div style="color:#c00;">Error al consultar nodos.</div>';
-    });
+function actualizarListaNodos() {
+  if (!ros.isConnected) {
+    contenedorNodos.innerHTML = '<div style="color:#888;">No conectado a ROS</div>';
+    return;
   }
-
-  function actualizarListaTopicos() {
-    if (!ros.isConnected) {
-      contenedorTopicos.innerHTML = '<div style="color:#888;">No conectado a ROS</div>';
-      return;
-    }
-    const service = new ROSLIB.Service({
-      ros: ros,
-      name: '/rosapi/topics',
-      serviceType: 'rosapi/GetTopics'
-    });
-    service.callService(new ROSLIB.ServiceRequest({}), function(result) {
-      if (result.topics && result.topics.length > 0) {
-        contenedorTopicos.innerHTML =
-          `<ul style="font-family:monospace; font-size:1.08em; padding-left:1em; margin:0;">
-            ${result.topics.map(topico => `<li>${topico}</li>`).join('')}
-          </ul>`;
-      } else {
-        contenedorTopicos.innerHTML = '<div style="color:#888;">No hay tópicos activos.</div>';
-      }
-    }, function(error) {
-      contenedorTopicos.innerHTML = '<div style="color:#c00;">Error al consultar tópicos.</div>';
-    });
-  }
-
-  // --- INTEGRADO: Dropdown avanzado (nodos/tópicos y comandos) ---
-  const dropdownSeleccion = document.getElementById('dropdown-seleccion');
-  const dropdownComando = document.getElementById('dropdown-comando');
-  const resultadoComando = document.getElementById('resultado-comando');
-
-  function limpiarDropdownSeleccion() {
-    if (!dropdownSeleccion) return;
-    dropdownSeleccion.innerHTML = '<option value="" disabled selected>Selecciona nodo o tópico</option>';
-  }
-
-  function poblarDropdownSeleccion(nodos, topicos) {
-    if (!dropdownSeleccion) return;
-    limpiarDropdownSeleccion();
-    if (topicos && topicos.length) {
-      const group = document.createElement('optgroup');
-      group.label = "Tópicos";
-      topicos.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = "topic:" + t;
-        opt.textContent = t;
-        group.appendChild(opt);
-      });
-      dropdownSeleccion.appendChild(group);
-    }
-    if (nodos && nodos.length) {
-      const group = document.createElement('optgroup');
-      group.label = "Nodos";
-      nodos.forEach(n => {
-        const opt = document.createElement('option');
-        opt.value = "node:" + n;
-        opt.textContent = n;
-        group.appendChild(opt);
-      });
-      dropdownSeleccion.appendChild(group);
-    }
-  }
-
-  function actualizarNodosYTopicosYDropdown() {
-    actualizarListaNodos();
-    actualizarListaTopicos();
-
-    if (!ros || !ros.isConnected) {
-      limpiarDropdownSeleccion();
-      if (resultadoComando) resultadoComando.textContent = "No conectado a ROS.";
-      return;
-    }
-    let nodos = [], topicos = [];
-    let nodosReady = false, topicosReady = false;
-    const checkReady = () => {
-      if (nodosReady && topicosReady) {
-        poblarDropdownSeleccion(nodos, topicos);
-      }
-    };
-    const srvNodos = new ROSLIB.Service({
-      ros: ros,
-      name: '/rosapi/nodes',
-      serviceType: 'rosapi/GetNodes'
-    });
-    srvNodos.callService(new ROSLIB.ServiceRequest({}), function(res) {
-      nodos = res.nodes || [];
-      nodosReady = true;
-      checkReady();
-    }, function() {
-      nodos = [];
-      nodosReady = true;
-      checkReady();
-    });
-    const srvTopicos = new ROSLIB.Service({
-      ros: ros,
-      name: '/rosapi/topics',
-      serviceType: 'rosapi/GetTopics'
-    });
-    srvTopicos.callService(new ROSLIB.ServiceRequest({}), function(res) {
-      topicos = res.topics || [];
-      topicosReady = true;
-      checkReady();
-    }, function() {
-      topicos = [];
-      topicosReady = true;
-      checkReady();
-    });
-  }
-
-  // Actualizar al presionar el botón y al abrir la pestaña
-  if (btnActualizar) {
-    btnActualizar.addEventListener('click', actualizarNodosYTopicosYDropdown);
-  }
-  window.addEventListener('hashchange', function() {
-    if (window.location.hash.replace('#', '') === 'nodos_topicos') {
-      actualizarNodosYTopicosYDropdown();
-    }
+  const service = new ROSLIB.Service({
+    ros: ros,
+    name: '/rosapi/nodes',
+    serviceType: 'rosapi/GetNodes'
   });
+  service.callService(new ROSLIB.ServiceRequest({}), function(result) {
+    if (result.nodes && result.nodes.length > 0) {
+      contenedorNodos.innerHTML =
+        `<ul style="font-family:monospace; font-size:1.08em; padding-left:1em; margin:0;">
+          ${result.nodes.map(nodo => `<li>${nodo}</li>`).join('')}
+        </ul>`;
+    } else {
+      contenedorNodos.innerHTML = '<div style="color:#888;">No hay nodos activos.</div>';
+    }
+  }, function(error) {
+    contenedorNodos.innerHTML = '<div style="color:#c00;">Error al consultar nodos.</div>';
+  });
+}
+
+function actualizarListaTopicos() {
+  if (!ros.isConnected) {
+    contenedorTopicos.innerHTML = '<div style="color:#888;">No conectado a ROS</div>';
+    return;
+  }
+  const service = new ROSLIB.Service({
+    ros: ros,
+    name: '/rosapi/topics',
+    serviceType: 'rosapi/GetTopics'
+  });
+  service.callService(new ROSLIB.ServiceRequest({}), function(result) {
+    if (result.topics && result.topics.length > 0) {
+      contenedorTopicos.innerHTML =
+        `<ul style="font-family:monospace; font-size:1.08em; padding-left:1em; margin:0;">
+          ${result.topics.map(topico => `<li>${topico}</li>`).join('')}
+        </ul>`;
+    } else {
+      contenedorTopicos.innerHTML = '<div style="color:#888;">No hay tópicos activos.</div>';
+    }
+  }, function(error) {
+    contenedorTopicos.innerHTML = '<div style="color:#c00;">Error al consultar tópicos.</div>';
+  });
+}
+
+// --- INTEGRADO: Dropdown avanzado (nodos/tópicos y comandos) ---
+function limpiarDropdownSeleccion() {
+  if (!dropdownSeleccion) return;
+  dropdownSeleccion.innerHTML = '<option value="" disabled selected>Selecciona nodo o tópico</option>';
+}
+
+function poblarDropdownSeleccion(nodos, topicos) {
+  if (!dropdownSeleccion) return;
+  limpiarDropdownSeleccion();
+  if (topicos && topicos.length) {
+    const group = document.createElement('optgroup');
+    group.label = "Tópicos";
+    topicos.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = "topic:" + t;
+      opt.textContent = t;
+      group.appendChild(opt);
+    });
+    dropdownSeleccion.appendChild(group);
+  }
+  if (nodos && nodos.length) {
+    const group = document.createElement('optgroup');
+    group.label = "Nodos";
+    nodos.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = "node:" + n;
+      opt.textContent = n;
+      group.appendChild(opt);
+    });
+    dropdownSeleccion.appendChild(group);
+  }
+}
+
+function actualizarNodosYTopicosYDropdown() {
+  actualizarListaNodos();
+  actualizarListaTopicos();
+
+  if (!ros || !ros.isConnected) {
+    limpiarDropdownSeleccion();
+    if (resultadoComando) resultadoComando.textContent = "No conectado a ROS.";
+    return;
+  }
+  let nodos = [], topicos = [];
+  let nodosReady = false, topicosReady = false;
+  const checkReady = () => {
+    if (nodosReady && topicosReady) {
+      poblarDropdownSeleccion(nodos, topicos);
+    }
+  };
+  const srvNodos = new ROSLIB.Service({
+    ros: ros,
+    name: '/rosapi/nodes',
+    serviceType: 'rosapi/GetNodes'
+  });
+  srvNodos.callService(new ROSLIB.ServiceRequest({}), function(res) {
+    nodos = res.nodes || [];
+    nodosReady = true;
+    checkReady();
+  }, function() {
+    nodos = [];
+    nodosReady = true;
+    checkReady();
+  });
+  const srvTopicos = new ROSLIB.Service({
+    ros: ros,
+    name: '/rosapi/topics',
+    serviceType: 'rosapi/GetTopics'
+  });
+  srvTopicos.callService(new ROSLIB.ServiceRequest({}), function(res) {
+    topicos = res.topics || [];
+    topicosReady = true;
+    checkReady();
+  }, function() {
+    topicos = [];
+    topicosReady = true;
+    checkReady();
+  });
+}
+
+// Actualizar al presionar el botón y al abrir la pestaña
+if (btnActualizar) {
+  btnActualizar.addEventListener('click', actualizarNodosYTopicosYDropdown);
+}
+window.addEventListener('hashchange', function() {
   if (window.location.hash.replace('#', '') === 'nodos_topicos') {
     actualizarNodosYTopicosYDropdown();
   }
+});
+if (window.location.hash.replace('#', '') === 'nodos_topicos') {
+  actualizarNodosYTopicosYDropdown();
+}
 
-  // === Lógica de ejecución de comandos del dropdown ===
-  if (dropdownComando) {
-    dropdownComando.addEventListener('change', function() {
-      if (!dropdownSeleccion || !resultadoComando) return;
-      resultadoComando.textContent = '';
-      const valor = dropdownSeleccion.value;
-      if (!valor) {
-        resultadoComando.textContent = 'Primero selecciona un nodo o tópico.';
-        return;
-      }
-      const [tipo, nombre] = valor.split(':');
-      const comando = dropdownComando.value;
+// === Lógica de ejecución de comandos con el BOTÓN Consultar ===
+if (btnConsultar) {
+  btnConsultar.addEventListener('click', function() {
+    if (!dropdownSeleccion || !resultadoComando || !dropdownComando) return;
+    resultadoComando.textContent = '';
+    const valor = dropdownSeleccion.value;
+    if (!valor) {
+      resultadoComando.textContent = 'Primero selecciona un nodo o tópico.';
+      return;
+    }
+    const [tipo, nombre] = valor.split(':');
+    const comando = dropdownComando.value;
 
-      if (comando === 'info') {
-        if (tipo === 'topic') {
-          // Tipo de mensaje
-          const srvTipo = new ROSLIB.Service({
-            ros: ros,
-            name: '/rosapi/topic_type',
-            serviceType: 'rosapi/TopicType'
-          });
-          srvTipo.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
-            resultadoComando.textContent = `Tipo de mensaje: ${res.type}`;
-          }, function() {
-            resultadoComando.textContent = "Error obteniendo tipo de mensaje.";
-          });
-        } else if (tipo === 'node') {
-          const srv = new ROSLIB.Service({
-            ros: ros,
-            name: '/rosapi/node_topics',
-            serviceType: 'rosapi/NodeTopics'
-          });
-          srv.callService(new ROSLIB.ServiceRequest({ node: nombre }), function(res) {
-            resultadoComando.textContent =
-              `Publica:\n${(res.publishing || []).join('\n')}\n\nSuscribe:\n${(res.subscribing || []).join('\n')}`;
-          }, function() {
-            resultadoComando.textContent = "Error obteniendo información del nodo.";
-          });
-        }
-      }
-      else if (comando === 'publishers' && tipo === 'topic') {
-        const srv = new ROSLIB.Service({
+    if (!comando) {
+      resultadoComando.textContent = 'Selecciona un comando.';
+      return;
+    }
+
+    if (comando === 'info') {
+      if (tipo === 'topic') {
+        const srvTipo = new ROSLIB.Service({
           ros: ros,
-          name: '/rosapi/publishers',
-          serviceType: 'rosapi/Publishers'
+          name: '/rosapi/topic_type',
+          serviceType: 'rosapi/TopicType'
         });
-        srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
-          resultadoComando.textContent = "Publishers:\n" + (res.publishers || []).join('\n');
+        srvTipo.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
+          resultadoComando.textContent = `Tipo de mensaje: ${res.type}`;
         }, function() {
-          resultadoComando.textContent = "Error obteniendo publishers.";
+          resultadoComando.textContent = "Error obteniendo tipo de mensaje.";
         });
-      }
-      else if (comando === 'subscribers' && tipo === 'topic') {
-        const srv = new ROSLIB.Service({
-          ros: ros,
-          name: '/rosapi/subscribers',
-          serviceType: 'rosapi/Subscribers'
-        });
-        srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
-          resultadoComando.textContent = "Subscribers:\n" + (res.subscribers || []).join('\n');
-        }, function() {
-          resultadoComando.textContent = "Error obteniendo subscribers.";
-        });
-      }
-      else if (comando === 'node_topics' && tipo === 'node') {
+      } else if (tipo === 'node') {
         const srv = new ROSLIB.Service({
           ros: ros,
           name: '/rosapi/node_topics',
@@ -369,30 +335,69 @@ window.addEventListener('DOMContentLoaded', handleHashChange);
           resultadoComando.textContent = "Error obteniendo información del nodo.";
         });
       }
-      else if (comando === 'topic_type' && tipo === 'topic') {
-        const srv = new ROSLIB.Service({
-          ros: ros,
-          name: '/rosapi/topic_type',
-          serviceType: 'rosapi/TopicType'
-        });
-        srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
-          resultadoComando.textContent = `Tipo de mensaje: ${res.type}`;
-        }, function() {
-          resultadoComando.textContent = "Error obteniendo tipo de mensaje.";
-        });
-      }
-      else {
-        resultadoComando.textContent = 'Este comando no está implementado para el elemento seleccionado.';
-      }
-    });
-  }
+    }
+    else if (comando === 'publishers' && tipo === 'topic') {
+      const srv = new ROSLIB.Service({
+        ros: ros,
+        name: '/rosapi/publishers',
+        serviceType: 'rosapi/Publishers'
+      });
+      srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
+        resultadoComando.textContent = "Publishers:\n" + (res.publishers || []).join('\n');
+      }, function() {
+        resultadoComando.textContent = "Error obteniendo publishers.";
+      });
+    }
+    else if (comando === 'subscribers' && tipo === 'topic') {
+      const srv = new ROSLIB.Service({
+        ros: ros,
+        name: '/rosapi/subscribers',
+        serviceType: 'rosapi/Subscribers'
+      });
+      srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
+        resultadoComando.textContent = "Subscribers:\n" + (res.subscribers || []).join('\n');
+      }, function() {
+        resultadoComando.textContent = "Error obteniendo subscribers.";
+      });
+    }
+    else if (comando === 'node_topics' && tipo === 'node') {
+      const srv = new ROSLIB.Service({
+        ros: ros,
+        name: '/rosapi/node_topics',
+        serviceType: 'rosapi/NodeTopics'
+      });
+      srv.callService(new ROSLIB.ServiceRequest({ node: nombre }), function(res) {
+        resultadoComando.textContent =
+          `Publica:\n${(res.publishing || []).join('\n')}\n\nSuscribe:\n${(res.subscribing || []).join('\n')}`;
+      }, function() {
+        resultadoComando.textContent = "Error obteniendo información del nodo.";
+      });
+    }
+    else if (comando === 'topic_type' && tipo === 'topic') {
+      const srv = new ROSLIB.Service({
+        ros: ros,
+        name: '/rosapi/topic_type',
+        serviceType: 'rosapi/TopicType'
+      });
+      srv.callService(new ROSLIB.ServiceRequest({ topic: nombre }), function(res) {
+        resultadoComando.textContent = `Tipo de mensaje: ${res.type}`;
+      }, function() {
+        resultadoComando.textContent = "Error obteniendo tipo de mensaje.";
+      });
+    }
+    else {
+      resultadoComando.textContent = 'Este comando no está implementado para el elemento seleccionado.';
+    }
+  });
+}
 
-  if (dropdownSeleccion) {
-    dropdownSeleccion.addEventListener('change', function() {
-      if (resultadoComando) resultadoComando.textContent = '';
-      if (dropdownComando) dropdownComando.selectedIndex = 0;
-    });
-  }
+// Limpia selección anterior al cambiar el dropdown
+if (dropdownSeleccion) {
+  dropdownSeleccion.addEventListener('change', function() {
+    if (resultadoComando) resultadoComando.textContent = '';
+    if (dropdownComando) dropdownComando.selectedIndex = 0;
+  });
+}
 
   // ==================== Monitor Dinámico de Tópicos ====================
 const monitorDropdownTopico = document.getElementById('monitor-dropdown-topico');
@@ -656,8 +661,9 @@ window.addEventListener('keydown', (e) => {
     case ' ': setTwist(0, 0); break;
   }
 });
+//Odometria Graficas con Historial
 
-//Odometria Graficas
+//Odometria Graficas con Historial
 
 // ======================= ODOMETRÍA (solo activa cuando se muestra) =======================
 
@@ -675,6 +681,29 @@ const chartsRuedas = [];
 let tiempoInicioOdo = null;
 let jointStatesListenerOdo = null;
 
+// ======= NUEVO: Variables para historial de estadísticas =======
+let historialGlobal = {
+  valores: [], // Todos los valores registrados
+  maxAbsoluto: 0,
+  minAbsoluto: 0,
+  promedioAcumulado: 0,
+  totalMuestras: 0,
+  tiempoInicio: null,
+  ultimaActualizacion: null
+};
+
+let historialRuedas = [];
+for (let i = 0; i < 4; i++) {
+  historialRuedas.push({
+    valores: [],
+    maxAbsoluto: 0,
+    minAbsoluto: 0,
+    promedioAcumulado: 0,
+    totalMuestras: 0,
+    velocidadActual: 0
+  });
+}
+
 // Elementos del DOM
 const divStats = document.getElementById('odometria-stats');
 if (divStats) divStats.innerHTML = "<b>Esperando datos...</b>";
@@ -689,6 +718,113 @@ function colorValor(val) {
   if (Math.abs(val) > 0.8 * Math.abs(VEL_MAX_MS)) return '#fa0';
   if (Math.abs(val) > 0.5 * Math.abs(VEL_MAX_MS)) return '#3a7';
   return '#08d';
+}
+
+// ======= NUEVO: Función para resetear historial =======
+function resetearHistorial() {
+  historialGlobal = {
+    valores: [],
+    maxAbsoluto: 0,
+    minAbsoluto: 0,
+    promedioAcumulado: 0,
+    totalMuestras: 0,
+    tiempoInicio: Date.now(),
+    ultimaActualizacion: null
+  };
+  
+  for (let i = 0; i < 4; i++) {
+    historialRuedas[i] = {
+      valores: [],
+      maxAbsoluto: 0,
+      minAbsoluto: 0,
+      promedioAcumulado: 0,
+      totalMuestras: 0,
+      velocidadActual: 0
+    };
+  }
+  
+  if (divStats) {
+    divStats.innerHTML = "<b>Historial reseteado. Esperando nuevos datos...</b>";
+  }
+}
+
+// ======= NUEVO: Función para actualizar historial =======
+function actualizarHistorial(valoresRuedas) {
+  const ahora = Date.now();
+  
+  if (!historialGlobal.tiempoInicio) {
+    historialGlobal.tiempoInicio = ahora;
+  }
+  historialGlobal.ultimaActualizacion = ahora;
+  
+  // Actualizar historial por rueda
+  valoresRuedas.forEach((valor, idx) => {
+    if (valor !== null && valor !== undefined) {
+      const rueda = historialRuedas[idx];
+      rueda.velocidadActual = valor;
+      rueda.valores.push(valor);
+      rueda.totalMuestras++;
+      
+      // Actualizar máximo y mínimo absolutos
+      if (rueda.totalMuestras === 1) {
+        rueda.maxAbsoluto = valor;
+        rueda.minAbsoluto = valor;
+        rueda.promedioAcumulado = valor;
+      } else {
+        rueda.maxAbsoluto = Math.max(rueda.maxAbsoluto, valor);
+        rueda.minAbsoluto = Math.min(rueda.minAbsoluto, valor);
+        rueda.promedioAcumulado = ((rueda.promedioAcumulado * (rueda.totalMuestras - 1)) + valor) / rueda.totalMuestras;
+      }
+      
+      // Mantener solo los últimos 1000 valores para evitar uso excesivo de memoria
+      if (rueda.valores.length > 1000) {
+        rueda.valores.shift();
+      }
+    }
+  });
+  
+  // Actualizar historial global
+  const valoresValidos = valoresRuedas.filter(v => v !== null && v !== undefined);
+  if (valoresValidos.length > 0) {
+    historialGlobal.valores.push(...valoresValidos);
+    historialGlobal.totalMuestras += valoresValidos.length;
+    
+    const maxActual = Math.max(...valoresValidos);
+    const minActual = Math.min(...valoresValidos);
+    const promedioActual = valoresValidos.reduce((a, b) => a + b, 0) / valoresValidos.length;
+    
+    if (historialGlobal.totalMuestras === valoresValidos.length) {
+      historialGlobal.maxAbsoluto = maxActual;
+      historialGlobal.minAbsoluto = minActual;
+      historialGlobal.promedioAcumulado = promedioActual;
+    } else {
+      historialGlobal.maxAbsoluto = Math.max(historialGlobal.maxAbsoluto, maxActual);
+      historialGlobal.minAbsoluto = Math.min(historialGlobal.minAbsoluto, minActual);
+      const muestrasAnteriores = historialGlobal.totalMuestras - valoresValidos.length;
+      historialGlobal.promedioAcumulado = ((historialGlobal.promedioAcumulado * muestrasAnteriores) + (promedioActual * valoresValidos.length)) / historialGlobal.totalMuestras;
+    }
+    
+    // Mantener solo los últimos 4000 valores globales
+    if (historialGlobal.valores.length > 4000) {
+      historialGlobal.valores = historialGlobal.valores.slice(-4000);
+    }
+  }
+}
+
+// ======= NUEVO: Función para formatear tiempo transcurrido =======
+function formatearTiempoTranscurrido(inicio, fin) {
+  if (!inicio || !fin) return "N/A";
+  
+  const diff = Math.floor((fin - inicio) / 1000); // segundos
+  
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
+  
+  const horas = Math.floor(diff / 3600);
+  const minutos = Math.floor((diff % 3600) / 60);
+  const segundos = diff % 60;
+  
+  return `${horas}h ${minutos}m ${segundos}s`;
 }
 
 // Inicializar gráficas (Chart.js)
@@ -754,19 +890,27 @@ for (let i = 1; i <= 4; i++) {
   }
 }
 
-// Suscripción dinámica
+// Suscripción dinámica (MODIFICADA)
 function activarGraficasOdo() {
   if (jointStatesListenerOdo) return;
   tiempoInicioOdo = null;
+  
+  // Inicializar historial si es la primera vez
+  if (!historialGlobal.tiempoInicio) {
+    historialGlobal.tiempoInicio = Date.now();
+  }
+  
   jointStatesListenerOdo = new ROSLIB.Topic({
     ros: ros,
     name: '/joint_states',
     messageType: 'sensor_msgs/JointState'
   });
+  
   jointStatesListenerOdo.subscribe(function(msg) {
     if (!tiempoInicioOdo) tiempoInicioOdo = Date.now();
     const tiempo = ((Date.now() - tiempoInicioOdo) / 1000).toFixed(1);
     let allVals = [];
+    let valoresRuedas = [null, null, null, null];
     let detalles = [];
 
     nombresRuedas.forEach((nombreRueda, idx) => {
@@ -774,6 +918,7 @@ function activarGraficasOdo() {
       if (index >= 0 && msg.velocity && msg.velocity[index] !== undefined && chartsRuedas[idx]) {
         const valMS = msg.velocity[index] * RADIO_RUEDA;
         allVals.push(valMS);
+        valoresRuedas[idx] = valMS;
 
         const chart = chartsRuedas[idx];
         chart.data.labels.push(tiempo);
@@ -784,46 +929,78 @@ function activarGraficasOdo() {
         }
         chart.update();
 
-        // Estadísticas por rueda (últimos 20)
+        // ======= MODIFICADO: Estadísticas con historial =======
+        const ruedaHistorial = historialRuedas[idx];
         const last = chart.data.datasets[0].data.slice(-20);
         const vmax = Math.max(...last).toFixed(3);
         const vmin = Math.min(...last).toFixed(3);
         const vavg = (last.reduce((a, b) => a + b, 0) / last.length).toFixed(3);
 
         detalles.push(
-          `<div style="margin-bottom:0.5em;">
+          `<div style="margin-bottom:0.8em; padding:0.3em; border:1px solid #ddd; border-radius:3px;">
             <b style="color:#2987d6;">Rueda ${idx+1}</b><br>
-            <span style="color:${colorValor(vmax)}">Max:</span> ${vmax}<br>
-            <span style="color:${colorValor(vmin)}">Min:</span> ${vmin}<br>
-            <span style="color:${colorValor(vavg)}">Prom:</span> ${vavg}
+            <small><b>Actual (últimos 20):</b></small><br>
+            <span style="color:${colorValor(vmax)}">Max:</span> ${vmax} | 
+            <span style="color:${colorValor(vmin)}">Min:</span> ${vmin} | 
+            <span style="color:${colorValor(vavg)}">Prom:</span> ${vavg}<br>
+            <small><b>Historial total:</b></small><br>
+            <span style="color:${colorValor(ruedaHistorial.maxAbsoluto)}">Máx:</span> ${ruedaHistorial.maxAbsoluto.toFixed(3)} | 
+            <span style="color:${colorValor(ruedaHistorial.minAbsoluto)}">Mín:</span> ${ruedaHistorial.minAbsoluto.toFixed(3)} | 
+            <span style="color:${colorValor(ruedaHistorial.promedioAcumulado)}">Prom:</span> ${ruedaHistorial.promedioAcumulado.toFixed(3)}<br>
+            <small>Muestras: ${ruedaHistorial.totalMuestras}</small>
           </div>`
         );
       }
     });
 
-    // Estadística global
+    // ======= NUEVO: Actualizar historial =======
+    if (allVals.length > 0) {
+      actualizarHistorial(valoresRuedas);
+    }
+
+    // ======= MODIFICADO: Estadística global con historial =======
     if (divStats && allVals.length) {
       const max = Math.max(...allVals).toFixed(3);
       const min = Math.min(...allVals).toFixed(3);
       const avg = (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(3);
-      divStats.innerHTML =
-        `<b>Resumen global</b><br>
-        <span style="color:${colorValor(max)};">Máx: ${max}</span> m/s<br>
-        <span style="color:${colorValor(min)};">Mín: ${min}</span> m/s<br>
-        <span style="color:${colorValor(avg)};">Promedio: ${avg}</span> m/s
+      
+      const tiempoTotal = formatearTiempoTranscurrido(historialGlobal.tiempoInicio, historialGlobal.ultimaActualizacion);
+      
+      divStats.innerHTML = 
+        `<div style="margin-bottom:1em; padding:0.5em; background:#f5f5f5; border-radius:5px;">
+          <b>📊 Resumen Actual</b><br>
+          <span style="color:${colorValor(max)};">Máx: ${max}</span> | 
+          <span style="color:${colorValor(min)};">Mín: ${min}</span> | 
+          <span style="color:${colorValor(avg)};">Promedio: ${avg}</span> m/s
+        </div>
+        
+        <div style="margin-bottom:1em; padding:0.5em; background:#e8f4fd; border-radius:5px;">
+          <b>📈 Historial Completo</b><br>
+          <span style="color:${colorValor(historialGlobal.maxAbsoluto)};">Máx absoluto: ${historialGlobal.maxAbsoluto.toFixed(3)}</span><br>
+          <span style="color:${colorValor(historialGlobal.minAbsoluto)};">Mín absoluto: ${historialGlobal.minAbsoluto.toFixed(3)}</span><br>
+          <span style="color:${colorValor(historialGlobal.promedioAcumulado)};">Promedio total: ${historialGlobal.promedioAcumulado.toFixed(3)}</span><br>
+          <small>Tiempo total: ${tiempoTotal} | Muestras: ${historialGlobal.totalMuestras}</small><br>
+          <button id="btn-reset-historial" style="margin-top:0.3em; padding:0.2em 0.5em; background:#ff6b6b; color:white; border:none; border-radius:3px; cursor:pointer; font-size:11px;">
+            🗑️ Reset Historial
+          </button>
+        </div>
+        
         <hr style="margin:0.5em 0;">
+        <b>📋 Detalle por Rueda</b><br>
         ${detalles.join('')}`;
     }
   });
 }
+
 function desactivarGraficasOdo() {
   if (jointStatesListenerOdo) {
     jointStatesListenerOdo.unsubscribe();
     jointStatesListenerOdo = null;
   }
+  // NOTA: No reseteamos el historial al desactivar, se mantiene
 }
 
-// Límites de odometría
+// Límites de odometría (sin cambios)
 function updateOdometryLimits() {
   const maxVel = parseFloat(inputMaxVel.value);
   const minVel = parseFloat(inputMinVel.value);
@@ -853,12 +1030,24 @@ function updateOdometryLimits() {
     chart.update();
   }
 }
+
 if (inputMaxVel) inputMaxVel.addEventListener('input', updateOdometryLimits);
 if (inputMinVel) inputMinVel.addEventListener('input', updateOdometryLimits);
 if (toggleMaxLine) toggleMaxLine.addEventListener('change', updateOdometryLimits);
 if (toggleMinLine) toggleMinLine.addEventListener('change', updateOdometryLimits);
 updateOdometryLimits();
 
+// ======= NUEVO: Event listener delegado para el botón de reset =======
+if (divStats) {
+  divStats.addEventListener('click', function(event) {
+    if (event.target && event.target.id === 'btn-reset-historial') {
+      resetearHistorial();
+    }
+  });
+}
+
+// ======= NUEVO: Hacer resetearHistorial disponible globalmente =======
+window.resetearHistorial = resetearHistorial;
 // --- ¡No agregues más lógica de botones aquí! ---
 // El manejo de mostrar/ocultar ya está en tu bloque global de botones.
 // Solo llama activarGraficasOdo() y desactivarGraficasOdo() desde allí.
@@ -1099,50 +1288,6 @@ function desactivarGraficasEncoders() {
 
 
 
-// --- MANEJO DE BOTONES DE GRÁFICAS, VERSIÓN FINAL ES GLOBAL SE USA PARA TODOS LOS CONJUNTOS DE GRAFICAS.---
-const botonesGraficas = document.querySelectorAll('.boton-grafica');
-const divGraficasOdometro = document.getElementById('graficas-odometro');
-const divGraficasEncoders = document.getElementById('graficas-encoders');
-const divGraficasUnicas = document.getElementById('graficas-unicas');
-
-if (botonesGraficas.length > 0) {
-  botonesGraficas.forEach(boton => {
-    boton.addEventListener('click', function () {
-      botonesGraficas.forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      const tipo = this.dataset.tipo;
-
-      // Oculta todos los paneles
-      if (divGraficasOdometro) divGraficasOdometro.style.display = "none";
-      if (divGraficasEncoders) divGraficasEncoders.style.display = "none";
-      if (divGraficasUnicas) divGraficasUnicas.style.display = "none";
-
-      // Siempre desactiva ambos antes de activar uno
-      if (typeof desactivarGraficasOdo === "function") desactivarGraficasOdo();
-      if (typeof desactivarGraficasEncoders === "function") desactivarGraficasEncoders();
-
-      // Solo activa el que corresponde
-      if (tipo === "odometro" && divGraficasOdometro) {
-        divGraficasOdometro.style.display = "flex";
-        if (typeof updateOdometryLimits === "function") updateOdometryLimits();
-        if (typeof activarGraficasOdo === "function") activarGraficasOdo();
-      }
-      if (tipo === "encoders" && divGraficasEncoders) {
-        divGraficasEncoders.style.display = "flex";
-        if (typeof updateEncoderLimits === "function") updateEncoderLimits();
-        if (typeof activarGraficasEncoders === "function") activarGraficasEncoders();
-      }
-      if (tipo === "unicas" && divGraficasUnicas) {
-        divGraficasUnicas.style.display = "block";
-      }
-    });
-  });
-
-  // Por defecto, muestra odometría (puedes poner encoders si prefieres)
-  const botonOdometroInicial = document.querySelector('[data-tipo="odometro"]');
-  if (botonOdometroInicial) botonOdometroInicial.click();
-}
-
 // ============ PESTAÑA MONITOREO INDEPENDIENTE Y AISLADA =============
 
 // 1. Variables DOM únicas para Monitoreo
@@ -1261,5 +1406,573 @@ if (window.location.hash.replace('#', '') === 'monitoreo') {
   setTimeout(actualizarMonitDropdownAuto, 30);
 }
 
+// --- Parámetros de Corriente (Motores) ---
+const nombresMotores = ['joint_wheel_1', 'joint_wheel_2', 'joint_wheel_3', 'joint_wheel_4'];
+const chartsCorrientes = [];
+let offsetsCorriente = [0, 0, 0, 0]; // Offset ajustable por usuario
+
+let tiempoInicioCorr = null;
+let jointStatesListenerCorr = null;
+
+let historialCorrGlobal = {
+  valores: [],
+  maxAbsoluto: 0,
+  minAbsoluto: 0,
+  promedioAcumulado: 0,
+  totalMuestras: 0,
+  tiempoInicio: null,
+  ultimaActualizacion: null
+};
+let historialCorrMot = [];
+for (let i = 0; i < 4; i++) {
+  historialCorrMot.push({
+    valores: [],
+    maxAbsoluto: 0,
+    minAbsoluto: 0,
+    promedioAcumulado: 0,
+    totalMuestras: 0,
+    corrienteActual: 0
+  });
+}
+
+// === Paleta de color para corriente ===
+function colorCorr(val, max) {
+  if (val > max) return '#d22';
+  if (val > 0.8 * max) return '#fa0';
+  if (val > 0.5 * max) return '#3a7';
+  return '#08d';
+}
+
+// === Inicializar gráficas de corriente ===
+for (let i = 1; i <= 4; i++) {
+  const canvas = document.getElementById(`grafica-corriente-${i}`);
+  if (canvas) {
+    chartsCorrientes.push(new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: `Motor ${i} (A)`,
+          data: [],
+          borderWidth: 2,
+          borderColor: '#f28c20',
+          pointRadius: 1,
+        }]
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        scales: {
+          x: { title: { display: true, text: 'Tiempo (s)' } },
+          y: {
+            title: { display: true, text: 'Corriente (A)' },
+            min: 0,
+            max: 4.5
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          annotation: { annotations: {} }
+        }
+      }
+    }));
+  }
+}
+
+// === Actualización de límites ===
+const inputMaxCorr = document.getElementById('input-max-corr');
+const inputMinCorr = document.getElementById('input-min-corr');
+const toggleMaxLineCorr = document.getElementById('toggle-maxline-corr');
+const toggleMinLineCorr = document.getElementById('toggle-minline-corr');
+
+function updateCorrienteLimits() {
+  const maxCorr = parseFloat(inputMaxCorr ? inputMaxCorr.value : '4.5');
+  const minCorr = parseFloat(inputMinCorr ? inputMinCorr.value : '0');
+  const showMax = toggleMaxLineCorr ? toggleMaxLineCorr.checked : true;
+  const showMin = toggleMinLineCorr ? toggleMinLineCorr.checked : true;
+  for (const chart of chartsCorrientes) {
+    chart.options.plugins.annotation.annotations = {};
+    if (showMax) {
+      chart.options.plugins.annotation.annotations.maxCorr = {
+        type: 'line',
+        yMin: maxCorr,
+        yMax: maxCorr,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: {
+          display: true,
+          content: 'Máx',
+          color: 'red',
+          position: 'end',
+          font: { size: 11 }
+        }
+      };
+    }
+    if (showMin) {
+      chart.options.plugins.annotation.annotations.minCorr = {
+        type: 'line',
+        yMin: minCorr,
+        yMax: minCorr,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: {
+          display: true,
+          content: 'Mín',
+          color: 'red',
+          position: 'end',
+          font: { size: 11 }
+        }
+      };
+    }
+    chart.options.scales.y.max = showMax ? maxCorr * 1.2 : undefined;
+    chart.options.scales.y.min = showMin ? minCorr * 0.8 : undefined;
+    if (!showMax && !showMin) {
+      chart.options.scales.y.max = undefined;
+      chart.options.scales.y.min = undefined;
+    }
+    chart.update();
+  }
+}
+if (inputMaxCorr) inputMaxCorr.addEventListener('input', updateCorrienteLimits);
+if (inputMinCorr) inputMinCorr.addEventListener('input', updateCorrienteLimits);
+if (toggleMaxLineCorr) toggleMaxLineCorr.addEventListener('change', updateCorrienteLimits);
+if (toggleMinLineCorr) toggleMinLineCorr.addEventListener('change', updateCorrienteLimits);
+
+// === Offset handlers ===
+function actualizarOffsetCorriente(idx) {
+  const inp = document.getElementById(`offset-corriente-${idx+1}`);
+  if (inp) {
+    offsetsCorriente[idx] = parseFloat(inp.value) || 0;
+  }
+}
+window.actualizarOffsetCorriente = actualizarOffsetCorriente;
+
+// === Subscripción dinámica de corriente ===
+function activarGraficasCorriente() {
+  if (jointStatesListenerCorr) return;
+  tiempoInicioCorr = null;
+  jointStatesListenerCorr = new ROSLIB.Topic({
+    ros: ros,
+    name: '/joint_states',
+    messageType: 'sensor_msgs/JointState'
+  });
+
+  jointStatesListenerCorr.subscribe(function(msg) {
+    if (!tiempoInicioCorr) tiempoInicioCorr = Date.now();
+    const maxCorr = parseFloat(inputMaxCorr ? inputMaxCorr.value : '4.5');
+    const tiempo = ((Date.now() - tiempoInicioCorr) / 1000).toFixed(1);
+    let allVals = [];
+    let valoresCorr = [null, null, null, null];
+    let detalles = [];
+
+    nombresMotores.forEach((nombre, idx) => {
+      const i = msg.name.indexOf(nombre);
+      if (i >= 0 && msg.effort && msg.effort[i] !== undefined && chartsCorrientes[idx]) {
+        const valA = msg.effort[i] + (offsetsCorriente[idx] || 0);
+        allVals.push(valA);
+        valoresCorr[idx] = valA;
+
+        const chart = chartsCorrientes[idx];
+        chart.data.labels.push(tiempo);
+        chart.data.datasets[0].data.push(valA);
+        if (chart.data.labels.length > 50) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
+        }
+        chart.update();
+
+        // Estadísticas
+        const motHistorial = historialCorrMot[idx];
+        const last = chart.data.datasets[0].data.slice(-20);
+        const vmax = Math.max(...last).toFixed(3);
+        const vmin = Math.min(...last).toFixed(3);
+        const vavg = (last.reduce((a, b) => a + b, 0) / last.length).toFixed(3);
+
+        detalles.push(
+          `<div style="margin-bottom:0.8em; padding:0.3em; border:1px solid #eee; border-radius:3px;">
+            <b style="color:#f28c20;">Motor ${idx+1}</b><br>
+            <small><b>Actual (últimos 20):</b></small><br>
+            <span style="color:${colorCorr(vmax, maxCorr)}">Max:</span> ${vmax} | 
+            <span style="color:${colorCorr(vmin, maxCorr)}">Min:</span> ${vmin} | 
+            <span style="color:${colorCorr(vavg, maxCorr)}">Prom:</span> ${vavg}<br>
+            <small><b>Historial total:</b></small><br>
+            <span style="color:${colorCorr(motHistorial.maxAbsoluto, maxCorr)}">Máx:</span> ${motHistorial.maxAbsoluto.toFixed(3)} | 
+            <span style="color:${colorCorr(motHistorial.minAbsoluto, maxCorr)}">Mín:</span> ${motHistorial.minAbsoluto.toFixed(3)} | 
+            <span style="color:${colorCorr(motHistorial.promedioAcumulado, maxCorr)}">Prom:</span> ${motHistorial.promedioAcumulado.toFixed(3)}<br>
+            <small>Muestras: ${motHistorial.totalMuestras}</small><br>
+            <div>
+              <label style="font-size:0.96em;">Offset: 
+                <input type="number" id="offset-corriente-${idx+1}" value="${offsetsCorriente[idx] || 0}" step="0.01" style="width:55px;" onchange="actualizarOffsetCorriente(${idx})">
+              </label>
+            </div>
+          </div>`
+        );
+      }
+    });
+
+    // Historial y estadísticas (igual que antes, omitido por espacio pero igual a tu patrón)
+    // ...
+    // Aquí puedes agregar tu lógica para el historial y para actualizar #corriente-stats como ya la tienes.
+
+    // Estadísticas en HTML
+    const divStatsCorr = document.getElementById('corriente-stats');
+    if (divStatsCorr && allVals.length) {
+      const max = Math.max(...allVals).toFixed(3);
+      const min = Math.min(...allVals).toFixed(3);
+      const avg = (allVals.reduce((a, b) => a + b, 0) / allVals.length).toFixed(3);
+
+      divStatsCorr.innerHTML =
+        `<div style="margin-bottom:1em; padding:0.5em; background:#fff5e0; border-radius:5px;">
+          <b>📊 Resumen Actual</b><br>
+          <span style="color:${colorCorr(max, maxCorr)};">Máx: ${max}</span> | 
+          <span style="color:${colorCorr(min, maxCorr)};">Mín: ${min}</span> | 
+          <span style="color:${colorCorr(avg, maxCorr)};">Promedio: ${avg}</span> A
+        </div>
+        <hr style="margin:0.5em 0;">
+        <b>📋 Detalle por Motor</b><br>
+        ${detalles.join('')}`;
+    }
+  });
+}
+
+function desactivarGraficasCorriente() {
+  if (jointStatesListenerCorr) {
+    jointStatesListenerCorr.unsubscribe();
+    jointStatesListenerCorr = null;
+  }
+}
+// --- Charts y parámetros de MPU ---
+let chartAcel, chartGyro, chartOrient;
+let mpuListener = null;
+let mpuT0 = null;
+
+// === Inicializar gráficas de MPU (idéntico a otros paneles) ===
+function initChartsMPU() {
+  if (chartAcel && chartGyro && chartOrient) return;
+  // Gráfica aceleración
+  chartAcel = new Chart(document.getElementById('grafica-aceleracion').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'X', data: [], borderColor: '#08d', borderWidth: 2, pointRadius: 1 },
+        { label: 'Y', data: [], borderColor: '#fa0', borderWidth: 2, pointRadius: 1 },
+        { label: 'Z', data: [], borderColor: '#d22', borderWidth: 2, pointRadius: 1 }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Tiempo (s)' } },
+        y: { title: { display: true, text: 'm/s²' }, min: -20, max: 20 }
+      },
+      plugins: {
+        legend: { display: true },
+        annotation: { annotations: {} }
+      }
+    }
+  });
+  // Gráfica giroscopio
+  chartGyro = new Chart(document.getElementById('grafica-giroscopio').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'X', data: [], borderColor: '#08d', borderWidth: 2, pointRadius: 1 },
+        { label: 'Y', data: [], borderColor: '#fa0', borderWidth: 2, pointRadius: 1 },
+        { label: 'Z', data: [], borderColor: '#d22', borderWidth: 2, pointRadius: 1 }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Tiempo (s)' } },
+        y: { title: { display: true, text: 'rad/s' }, min: -10, max: 10 }
+      },
+      plugins: {
+        legend: { display: true },
+        annotation: { annotations: {} }
+      }
+    }
+  });
+  // Gráfica orientación (roll, pitch, yaw)
+  chartOrient = new Chart(document.getElementById('grafica-orientacion').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Roll', data: [], borderColor: '#08d', borderWidth: 2, pointRadius: 1 },
+        { label: 'Pitch', data: [], borderColor: '#fa0', borderWidth: 2, pointRadius: 1 },
+        { label: 'Yaw', data: [], borderColor: '#d22', borderWidth: 2, pointRadius: 1 }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Tiempo (s)' } },
+        y: { title: { display: true, text: 'Grados (°)' }, min: -180, max: 180 }
+      },
+      plugins: {
+        legend: { display: true }
+      }
+    }
+  });
+}
+
+// === Actualización de límites ===
+const inputMaxAcel = document.getElementById('input-max-acel');
+const inputMinAcel = document.getElementById('input-min-acel');
+const toggleMaxLineAcel = document.getElementById('toggle-maxline-acel');
+const toggleMinLineAcel = document.getElementById('toggle-minline-acel');
+
+const inputMaxGyro = document.getElementById('input-max-gyro');
+const inputMinGyro = document.getElementById('input-min-gyro');
+const toggleMaxLineGyro = document.getElementById('toggle-maxline-gyro');
+const toggleMinLineGyro = document.getElementById('toggle-minline-gyro');
+
+function updateLimitsMPU() {
+  // Aceleración
+  const maxA = parseFloat(inputMaxAcel?.value ?? "20");
+  const minA = parseFloat(inputMinAcel?.value ?? "-20");
+  const showMaxA = toggleMaxLineAcel?.checked ?? true;
+  const showMinA = toggleMinLineAcel?.checked ?? true;
+  if (chartAcel) {
+    chartAcel.options.plugins.annotation.annotations = {};
+    if (showMaxA) {
+      chartAcel.options.plugins.annotation.annotations.maxAcel = {
+        type: 'line',
+        yMin: maxA,
+        yMax: maxA,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: { display: true, content: 'Máx', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    }
+    if (showMinA) {
+      chartAcel.options.plugins.annotation.annotations.minAcel = {
+        type: 'line',
+        yMin: minA,
+        yMax: minA,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: { display: true, content: 'Mín', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    }
+    chartAcel.options.scales.y.max = showMaxA ? maxA * 1.1 : undefined;
+    chartAcel.options.scales.y.min = showMinA ? minA * 1.1 : undefined;
+    if (!showMaxA && !showMinA) {
+      chartAcel.options.scales.y.max = undefined;
+      chartAcel.options.scales.y.min = undefined;
+    }
+    chartAcel.update();
+  }
+  // Giroscopio
+  const maxG = parseFloat(inputMaxGyro?.value ?? "10");
+  const minG = parseFloat(inputMinGyro?.value ?? "-10");
+  const showMaxG = toggleMaxLineGyro?.checked ?? true;
+  const showMinG = toggleMinLineGyro?.checked ?? true;
+  if (chartGyro) {
+    chartGyro.options.plugins.annotation.annotations = {};
+    if (showMaxG) {
+      chartGyro.options.plugins.annotation.annotations.maxGyro = {
+        type: 'line',
+        yMin: maxG,
+        yMax: maxG,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: { display: true, content: 'Máx', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    }
+    if (showMinG) {
+      chartGyro.options.plugins.annotation.annotations.minGyro = {
+        type: 'line',
+        yMin: minG,
+        yMax: minG,
+        borderColor: 'red',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: { display: true, content: 'Mín', color: 'red', position: 'end', font: { size: 11 } }
+      };
+    }
+    chartGyro.options.scales.y.max = showMaxG ? maxG * 1.1 : undefined;
+    chartGyro.options.scales.y.min = showMinG ? minG * 1.1 : undefined;
+    if (!showMaxG && !showMinG) {
+      chartGyro.options.scales.y.max = undefined;
+      chartGyro.options.scales.y.min = undefined;
+    }
+    chartGyro.update();
+  }
+}
+
+// === Listeners (igual que el patrón de corriente) ===
+if (inputMaxAcel) inputMaxAcel.addEventListener('input', updateLimitsMPU);
+if (inputMinAcel) inputMinAcel.addEventListener('input', updateLimitsMPU);
+if (toggleMaxLineAcel) toggleMaxLineAcel.addEventListener('change', updateLimitsMPU);
+if (toggleMinLineAcel) toggleMinLineAcel.addEventListener('change', updateLimitsMPU);
+
+if (inputMaxGyro) inputMaxGyro.addEventListener('input', updateLimitsMPU);
+if (inputMinGyro) inputMinGyro.addEventListener('input', updateLimitsMPU);
+if (toggleMaxLineGyro) toggleMaxLineGyro.addEventListener('change', updateLimitsMPU);
+if (toggleMinLineGyro) toggleMinLineGyro.addEventListener('change', updateLimitsMPU);
+
+// === Subscripción dinámica de la IMU ===
+function activarGraficasMPU() {
+  if (mpuListener) return;
+  initChartsMPU();
+  updateLimitsMPU();
+  mpuT0 = null;
+  mpuListener = new ROSLIB.Topic({
+    ros: ros,
+    name: '/imu/data',
+    messageType: 'sensor_msgs/Imu'
+  });
+  mpuListener.subscribe(function(msg) {
+    if (!mpuT0) mpuT0 = Date.now();
+    const t = ((Date.now() - mpuT0) / 1000).toFixed(1);
+
+    // Aceleración
+    chartAcel.data.labels.push(t);
+    chartAcel.data.datasets[0].data.push(msg.linear_acceleration.x);
+    chartAcel.data.datasets[1].data.push(msg.linear_acceleration.y);
+    chartAcel.data.datasets[2].data.push(msg.linear_acceleration.z);
+    if (chartAcel.data.labels.length > 50) {
+      chartAcel.data.labels.shift();
+      chartAcel.data.datasets.forEach(ds=>ds.data.shift());
+    }
+    chartAcel.update();
+
+    // Giroscopio
+    chartGyro.data.labels.push(t);
+    chartGyro.data.datasets[0].data.push(msg.angular_velocity.x);
+    chartGyro.data.datasets[1].data.push(msg.angular_velocity.y);
+    chartGyro.data.datasets[2].data.push(msg.angular_velocity.z);
+    if (chartGyro.data.labels.length > 50) {
+      chartGyro.data.labels.shift();
+      chartGyro.data.datasets.forEach(ds=>ds.data.shift());
+    }
+    chartGyro.update();
+
+    // Orientación (quaternion → euler)
+    const q = msg.orientation;
+    const euler = quaternionToEuler(q.x, q.y, q.z, q.w);
+    chartOrient.data.labels.push(t);
+    chartOrient.data.datasets[0].data.push(euler[0]);
+    chartOrient.data.datasets[1].data.push(euler[1]);
+    chartOrient.data.datasets[2].data.push(euler[2]);
+    if (chartOrient.data.labels.length > 50) {
+      chartOrient.data.labels.shift();
+      chartOrient.data.datasets.forEach(ds=>ds.data.shift());
+    }
+    chartOrient.update();
+
+    // Estado actual
+    const divStats = document.getElementById('mpu-stats');
+    if (divStats) {
+      divStats.innerHTML = `
+        <div style="margin-top:1em; padding:0.7em; background:#f8faff; border-radius:7px;">
+          <b>Estado Actual IMU</b><br>
+          <span style="color:#08d;">Aceleración:</span>
+          x=${msg.linear_acceleration.x.toFixed(2)} y=${msg.linear_acceleration.y.toFixed(2)} z=${msg.linear_acceleration.z.toFixed(2)}<br>
+          <span style="color:#fa0;">Vel. Angular:</span>
+          x=${msg.angular_velocity.x.toFixed(3)} y=${msg.angular_velocity.y.toFixed(3)} z=${msg.angular_velocity.z.toFixed(3)}<br>
+          <span style="color:#d22;">Orientación:</span>
+          Roll=${euler[0].toFixed(1)}° Pitch=${euler[1].toFixed(1)}° Yaw=${euler[2].toFixed(1)}°
+        </div>
+      `;
+    }
+  });
+}
+
+function desactivarGraficasMPU() {
+  if (mpuListener) {
+    mpuListener.unsubscribe();
+    mpuListener = null;
+  }
+}
+
+// --- Quaternion a Euler ---
+function quaternionToEuler(x, y, z, w) {
+  let ysqr = y * y;
+  let t0 = +2.0 * (w * x + y * z);
+  let t1 = +1.0 - 2.0 * (x * x + ysqr);
+  let roll = Math.atan2(t0, t1);
+  let t2 = +2.0 * (w * y - z * x);
+  t2 = t2 > +1.0 ? +1.0 : t2;
+  t2 = t2 < -1.0 ? -1.0 : t2;
+  let pitch = Math.asin(t2);
+  let t3 = +2.0 * (w * z + x * y);
+  let t4 = +1.0 - 2.0 * (ysqr + z * z);
+  let yaw = Math.atan2(t3, t4);
+  return [roll * 180/Math.PI, pitch * 180/Math.PI, yaw * 180/Math.PI];
+}
+
+
+
+// --- MANEJO DE BOTONES DE GRÁFICAS, VERSIÓN FINAL ES GLOBAL SE USA PARA TODOS LOS CONJUNTOS DE GRÁFICAS.---
+const botonesGraficas = document.querySelectorAll('.boton-grafica');
+const divGraficasOdometro = document.getElementById('graficas-odometro');
+const divGraficasEncoders = document.getElementById('graficas-encoders');
+const divGraficasMotores = document.getElementById('graficas-motores');
+const divGraficasUnicas = document.getElementById('graficas-unicas');
+const divGraficasMPU = document.getElementById('graficas-mpu');  // << NUEVO
+
+if (botonesGraficas.length > 0) {
+  botonesGraficas.forEach(boton => {
+    boton.addEventListener('click', function () {
+      botonesGraficas.forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const tipo = this.dataset.tipo;
+
+      // Oculta todos los paneles
+      if (divGraficasOdometro) divGraficasOdometro.style.display = "none";
+      if (divGraficasEncoders) divGraficasEncoders.style.display = "none";
+      if (divGraficasMotores) divGraficasMotores.style.display = "none";
+      if (divGraficasUnicas) divGraficasUnicas.style.display = "none";
+      if (divGraficasMPU) divGraficasMPU.style.display = "none";      // << NUEVO
+
+      // Siempre desactiva todos antes de activar uno
+      if (typeof desactivarGraficasOdo === "function") desactivarGraficasOdo();
+      if (typeof desactivarGraficasEncoders === "function") desactivarGraficasEncoders();
+      if (typeof desactivarGraficasCorriente === "function") desactivarGraficasCorriente();
+      if (typeof desactivarGraficasMPU === "function") desactivarGraficasMPU(); // << NUEVO
+
+      // Solo activa el que corresponde
+      if (tipo === "odometro" && divGraficasOdometro) {
+        divGraficasOdometro.style.display = "flex";
+        if (typeof updateOdometryLimits === "function") updateOdometryLimits();
+        if (typeof activarGraficasOdo === "function") activarGraficasOdo();
+      }
+      if (tipo === "encoders" && divGraficasEncoders) {
+        divGraficasEncoders.style.display = "flex";
+        if (typeof updateEncoderLimits === "function") updateEncoderLimits();
+        if (typeof activarGraficasEncoders === "function") activarGraficasEncoders();
+      }
+      if (tipo === "motores" && divGraficasMotores) {
+        divGraficasMotores.style.display = "flex";
+        if (typeof updateCorrienteLimits === "function") updateCorrienteLimits();
+        if (typeof activarGraficasCorriente === "function") activarGraficasCorriente();
+      }
+      if (tipo === "unicas" && divGraficasUnicas) {
+        divGraficasUnicas.style.display = "block";
+      }
+      if (tipo === "mpu" && divGraficasMPU) {  // << NUEVO
+        divGraficasMPU.style.display = "flex";
+        if (typeof activarGraficasMPU === "function") activarGraficasMPU();
+      }
+    });
+  });
+
+  // Por defecto, muestra odometría (puedes poner encoders o motores si prefieres)
+  const botonOdometroInicial = document.querySelector('[data-tipo="odometro"]');
+  if (botonOdometroInicial) botonOdometroInicial.click();
+}
 
 });
