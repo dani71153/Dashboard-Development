@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Robot ROS2</title>
+  
+  <style>
+    :root {
+      --primary-color: #2196F3;
+      --primary-dark: #1976D2;
+      --success-color: #4CAF50;
+      --warning-color: #FF9800;
+      --error-color: #F44336;
+      --bg-card: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --text-primary: #212121;
+      --border-color: #e0e0e0;
+      --border-radius: 8px;
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+      --spacing-md: 1rem;
+      --spacing-lg: 1.5rem;
+      --spacing-xl: 2rem;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    nav {
+      background: var(--bg-card);
+      padding: var(--spacing-md) var(--spacing-xl);
+      box-shadow: var(--shadow-md);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    nav a {
+      display: inline-block;
+      text-decoration: none;
+      padding: 0.5rem 1.5rem;
+      border-radius: var(--border-radius);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+    }
+
+    nav a:hover {
+      background: #BBDEFB;
+      border-color: var(--primary-color);
+      transform: translateY(-1px);
+    }
+
+    nav a.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-dark);
+    }
+
+    #estado-ros {
+      position: fixed;
+      top: var(--spacing-md);
+      right: var(--spacing-md);
+      background: var(--bg-card);
+      padding: 0.5rem 1rem;
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      gap: var(--spacing-md);
+      font-family: monospace;
+      font-size: 0.85rem;
+      z-index: 1001;
+      border: 1px solid var(--border-color);
+    }
+
+    #estado-ros span {
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: var(--spacing-xl);
+    }
+
+    section {
+      display: none;
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: var(--spacing-xl);
+      box-shadow: var(--shadow-md);
+      margin-bottom: var(--spacing-xl);
+      border: 1px solid var(--border-color);
+    }
+
+    section h2 {
+      color: var(--primary-dark);
+      margin-bottom: var(--spacing-lg);
+      font-size: 2rem;
+      font-weight: 700;
+      border-bottom: 3px solid var(--primary-color);
+      padding-bottom: 0.5rem;
+      display: inline-block;
+    }
+
+    button {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 0.5rem 1.5rem;
+      border-radius: var(--border-radius);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    button:disabled {
+      background: #9e9e9e;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #mapa-canvas {
+      width: 100%;
+      height: 60vh;
+      min-height: 400px;
+      background: #1a1f2e;
+      border-radius: 12px;
+      border: 2px solid var(--border-color);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #slam-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: var(--spacing-md);
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .status-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 2px solid #888;
+      background: #bbb;
+      box-shadow: inset 0 0 2px rgba(0,0,0,0.2);
+    }
+
+    .status-dot.status-running {
+      background: var(--success-color);
+      border-color: #2e7d32;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.status-idle {
+      background: var(--warning-color);
+      border-color: #ef6c00;
+    }
+
+    .status-dot.status-disconnected {
+      background: var(--error-color);
+      border-color: #c62828;
+    }
+
+    .status-dot.status-unknown {
+      background: #9e9e9e;
+      border-color: #616161;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    #mapa-controles {
+      margin-top: var(--spacing-md);
+      padding: var(--spacing-md);
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius);
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    #mapa-info {
+      margin-top: var(--spacing-md);
+      padding: var(--spacing-md);
+      background: #e8f4fd;
+      border-radius: var(--border-radius);
+      border-left: 4px solid var(--primary-color);
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: var(--border-radius);
+      margin-bottom: var(--spacing-md);
+      border-left: 4px solid;
+    }
+
+    .alert-info {
+      background: #e3f2fd;
+      border-color: var(--primary-color);
+      color: #1565c0;
+    }
+
+    .alert-warning {
+      background: #fff3e0;
+      border-color: var(--warning-color);
+      color: #e65100;
+    }
+
+    .alert-success {
+      background: #e8f5e9;
+      border-color: var(--success-color);
+      color: #2e7d32;
+    }
+
+    @media (max-width: 768px) {
+      main {
+        padding: var(--spacing-md);
+      }
+
+      section {
+        padding: var(--spacing-md);
+      }
+
+      #estado-ros {
+        position: static;
+        margin: var(--spacing-md) auto;
+        max-width: fit-content;
+      }
+
+      #mapa-canvas {
+        height: 50vh;
+        min-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <ul>
+      <li><a href="#inicio" data-tab="inicio">Inicio</a></li>
+      <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
+      <li><a href="#control" data-tab="control">Control</a></li>
+    </ul>
+  </nav>
+
+  <aside id="estado-ros">
+    <span id="ros-status">🔴 Desconectado</span>
+  </aside>
+  
+  <main>
+    <!-- SECCIÓN INICIO -->
+    <section id="inicio">
+      <h2>Dashboard Robot ROS2</h2>
+      <div class="alert alert-info">
+        <strong>📡 Estado de Conexión:</strong>
+        <p id="connection-details">Esperando conexión con ROS...</p>
+      </div>
+      
+      <div class="alert alert-warning">
+        <strong>⚠️ Requisitos:</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li>ROSBridge debe estar corriendo en <code>ws://localhost:9090</code></li>
+          <li>Tópico <code>/map</code> debe estar publicando</li>
+          <li>Navegador con soporte para WebGL</li>
+        </ul>
+      </div>
+
+      <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Comandos útiles:</h3>
+      <pre style="background: #2c3e50; color: #ecf0f1; padding: 1rem; border-radius: 8px; overflow-x: auto;">
+# Iniciar ROSBridge
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+
+# Verificar tópicos
+ros2 topic list
+
+# Ver mapa
+ros2 topic echo /map
+      </pre>
+    </section>
+
+    <!-- SECCIÓN MAPA -->
+    <section id="mapa">
+      <h2>Visualización del Mapa 2D</h2>
+      
+      <div id="slam-status">
+        <span id="slam-status-dot" class="status-dot status-unknown"></span>
+        <span id="slam-status-text">SLAMToolbox: Sin datos</span>
+      </div>
+
+      <div id="mapa-canvas"></div>
+
+      <div id="mapa-controles">
+        <button id="btn-centrar-mapa">🎯 Centrar Vista</button>
+        <button id="btn-reset-mapa">🔄 Resetear Mapa</button>
+        <button id="btn-toggle-robot">👁️ Mostrar/Ocultar Robot</button>
+        <label style="margin-left: auto;">
+          <input type="checkbox" id="checkbox-auto-center" checked>
+          Auto-centrar en robot
+        </label>
+      </div>
+
+      <div id="mapa-info">
+        <strong>ℹ️ Estado del Mapa:</strong>
+        <div id="mapa-info-content" style="margin-top: 0.5rem;">
+          Esperando datos del mapa...
+        </div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN CONTROL -->
+    <section id="control">
+      <h2>Control del Robot</h2>
+      <div class="alert alert-info">
+        <p>Esta sección estará disponible próximamente.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- LIBRERÍAS EN ORDEN CORRECTO -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/roslib/1.3.0/roslib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/EaselJS/1.0.2/easeljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/EventEmitter/5.2.8/EventEmitter.min.js"></script>
+
+  <!-- CÓDIGO PRINCIPAL -->
+  <script>
+    // ============================================================================
+    // DASHBOARD ROS2 CON VISUALIZADOR DE MAPA
+    // ============================================================================
+    
+    console.log('🚀 Iniciando Dashboard ROS2...');
+
+    // Variables globales
+    let ros = null;
+    let mapViewer = null;
+    let mapCanvas = null;
+    let robotVisible = true;
+    let autoCenter = true;
+
+    // Elementos del DOM
+    const rosStatus = document.getElementById('ros-status');
+    const connectionDetails = document.getElementById('connection-details');
+    const slamStatusDot = document.getElementById('slam-status-dot');
+    const slamStatusText = document.getElementById('slam-status-text');
+    const mapaInfoContent = document.getElementById('mapa-info-content');
+
+    // ============================================================================
+    // CONEXIÓN A ROS
+    // ============================================================================
+
+    function initROS() {
+      console.log('🔌 Conectando a ROS...');
+      
+      ros = new ROSLIB.Ros({
+        url: 'ws://localhost:9090'
+      });
+
+      ros.on('connection', function() {
+        console.log('✅ Conectado a ROSBridge');
+        if (rosStatus) rosStatus.textContent = '🟢 Conectado';
+        if (connectionDetails) {
+          connectionDetails.innerHTML = `
+            <strong>✅ Conectado a ROSBridge</strong><br>
+            URL: ws://localhost:9090<br>
+            Timestamp: ${new Date().toLocaleString()}
+          `;
+        }
+        setSlamStatus('unknown', 'SLAMToolbox: Consultando...');
+        checkSlamStatus();
+        
+        // Si estamos en la pestaña de mapa, inicializar
+        if (window.location.hash === '#mapa') {
+          setTimeout(initSimpleMap, 100);
+        }
+      });
+
+      ros.on('error', function(error) {
+        console.error('❌ Error de conexión ROS:', error);
+        if (rosStatus) rosStatus.textContent = '⚠️ Error';
+        if (connectionDetails) {
+          connectionDetails.innerHTML = `
+            <strong>❌ Error de conexión</strong><br>
+            Verifica que ROSBridge esté corriendo en ws://localhost:9090
+          `;
+        }
+      });
+
+      ros.on('close', function() {
+        console.log('🔴 Desconectado de ROS');
+        if (rosStatus) rosStatus.textContent = '🔴 Desconectado';
+        if (connectionDetails) {
+          connectionDetails.innerHTML = 'Desconectado de ROS. Intentando reconectar...';
+        }
+        setSlamStatus('disconnected', 'SLAMToolbox: Sin conexión');
+        cleanupMap();
+      });
+    }
+
+    // ============================================================================
+    // VISUALIZADOR DE MAPA SIMPLIFICADO
+    // ============================================================================
+
+    function initSimpleMap() {
+      if (mapViewer || !ros || !ros.isConnected) {
+        console.log('⚠️ No se puede inicializar el mapa');
+        return;
+      }
+
+      console.log('🗺️ Inicializando visualizador de mapa...');
+
+      const container = document.getElementById('mapa-canvas');
+      if (!container) {
+        console.error('❌ No se encontró el contenedor del mapa');
+        return;
+      }
+
+      try {
+        // Crear canvas manualmente
+        mapCanvas = document.createElement('canvas');
+        mapCanvas.width = container.clientWidth;
+        mapCanvas.height = container.clientHeight;
+        mapCanvas.style.width = '100%';
+        mapCanvas.style.height = '100%';
+        container.innerHTML = '';
+        container.appendChild(mapCanvas);
+
+        const ctx = mapCanvas.getContext('2d');
+
+        // Suscribirse al tópico del mapa
+        const mapTopic = new ROSLIB.Topic({
+          ros: ros,
+          name: '/map',
+          messageType: 'nav_msgs/OccupancyGrid'
+        });
+
+        mapTopic.subscribe(function(message) {
+          console.log('📍 Datos del mapa recibidos');
+          drawMap(ctx, message);
+          updateMapInfo(message);
+        });
+
+        mapViewer = { topic: mapTopic, ctx: ctx, lastMessage: null };
+
+        console.log('✅ Visualizador de mapa inicializado');
+
+        if (mapaInfoContent) {
+          mapaInfoContent.innerHTML = `
+            <strong>✅ Mapa inicializado</strong><br>
+            Esperando datos del tópico /map...
+          `;
+        }
+
+      } catch (error) {
+        console.error('❌ Error al inicializar mapa:', error);
+        if (mapaInfoContent) {
+          mapaInfoContent.innerHTML = `
+            <strong>❌ Error:</strong> ${error.message}
+          `;
+        }
+      }
+    }
+
+    function drawMap(ctx, mapData) {
+      if (!ctx || !mapData) return;
+
+      const width = mapData.info.width;
+      const height = mapData.info.height;
+      const resolution = mapData.info.resolution;
+      const data = mapData.data;
+
+      // Limpiar canvas
+      ctx.fillStyle = '#1a1f2e';
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+      // Calcular escala para ajustar al canvas
+      const scaleX = ctx.canvas.width / width;
+      const scaleY = ctx.canvas.height / height;
+      const scale = Math.min(scaleX, scaleY);
+
+      // Centrar el mapa
+      const offsetX = (ctx.canvas.width - width * scale) / 2;
+      const offsetY = (ctx.canvas.height - height * scale) / 2;
+
+      // Dibujar el mapa
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = y * width + x;
+          const value = data[index];
+
+          // Color basado en el valor de ocupación
+          if (value === -1) {
+            ctx.fillStyle = '#444'; // Desconocido
+          } else if (value === 0) {
+            ctx.fillStyle = '#fff'; // Libre
+          } else if (value === 100) {
+            ctx.fillStyle = '#000'; // Ocupado
+          } else {
+            const gray = Math.floor(255 * (1 - value / 100));
+            ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+          }
+
+          ctx.fillRect(x, height - y - 1, 1, 1);
+        }
+      }
+
+      ctx.restore();
+
+      // Guardar para información
+      if (mapViewer) {
+        mapViewer.lastMessage = mapData;
+      }
+    }
+
+    function updateMapInfo(mapData) {
+      if (!mapaInfoContent) return;
+
+      const info = mapData.info;
+      const occupiedCells = mapData.data.filter(v => v === 100).length;
+      const freeCells = mapData.data.filter(v => v === 0).length;
+      const unknownCells = mapData.data.filter(v => v === -1).length;
+      const totalCells = mapData.data.length;
+
+      mapaInfoContent.innerHTML = `
+        <strong>✅ Mapa Activo</strong><br>
+        <strong>Dimensiones:</strong> ${info.width} × ${info.height} celdas<br>
+        <strong>Resolución:</strong> ${info.resolution.toFixed(3)} m/celda<br>
+        <strong>Origen:</strong> (${info.origin.position.x.toFixed(2)}, ${info.origin.position.y.toFixed(2)})<br>
+        <strong>Ocupación:</strong> 
+        ${((occupiedCells / totalCells) * 100).toFixed(1)}% ocupado, 
+        ${((freeCells / totalCells) * 100).toFixed(1)}% libre, 
+        ${((unknownCells / totalCells) * 100).toFixed(1)}% desconocido
+      `;
+    }
+
+    function cleanupMap() {
+      if (mapViewer && mapViewer.topic) {
+        mapViewer.topic.unsubscribe();
+      }
+      mapViewer = null;
+      
+      const container = document.getElementById('mapa-canvas');
+      if (container) {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">Mapa desconectado</div>';
+      }
+
+      if (mapaInfoContent) {
+        mapaInfoContent.innerHTML = 'Mapa desconectado. Esperando conexión...';
+      }
+    }
+
+    // ============================================================================
+    // ESTADO DE SLAM
+    // ============================================================================
+
+    function setSlamStatus(state, text) {
+      if (!slamStatusDot || !slamStatusText) return;
+
+      slamStatusDot.className = 'status-dot';
+      slamStatusDot.classList.add(`status-${state}`);
+      slamStatusText.textContent = text;
+    }
+
+    function checkSlamStatus() {
+      if (!ros || !ros.isConnected) return;
+
+      const service = new ROSLIB.Service({
+        ros: ros,
+        name: '/rosapi/nodes',
+        serviceType: 'rosapi/Nodes'
+      });
+
+      service.callService(new ROSLIB.ServiceRequest({}), function(result) {
+        const nodes = result.nodes || [];
+        const hasSlamToolbox = nodes.some(n => n.includes('slam_toolbox'));
+
+        if (hasSlamToolbox) {
+          setSlamStatus('running', 'SLAMToolbox: ✅ En ejecución');
+        } else {
+          setSlamStatus('idle', 'SLAMToolbox: ⚠️ No detectado');
+        }
+      }, function() {
+        setSlamStatus('unknown', 'SLAMToolbox: ❓ No se pudo consultar');
+      });
+    }
+
+    // ============================================================================
+    // CONTROLES DEL MAPA
+    // ============================================================================
+
+    const btnCentrar = document.getElementById('btn-centrar-mapa');
+    const btnReset = document.getElementById('btn-reset-mapa');
+    const btnToggleRobot = document.getElementById('btn-toggle-robot');
+    const checkboxAutoCenter = document.getElementById('checkbox-auto-center');
+
+    if (btnCentrar) {
+      btnCentrar.addEventListener('click', function() {
+        console.log('🎯 Centrando vista del mapa');
+        if (mapViewer && mapViewer.lastMessage) {
+          drawMap(mapViewer.ctx, mapViewer.lastMessage);
+        }
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener('click', function() {
+        console.log('🔄 Reseteando mapa');
+        cleanupMap();
+        setTimeout(initSimpleMap, 100);
+      });
+    }
+
+    if (btnToggleRobot) {
+      btnToggleRobot.addEventListener('click', function() {
+        robotVisible = !robotVisible;
+        this.textContent = robotVisible ? '👁️ Ocultar Robot' : '👁️ Mostrar Robot';
+        console.log(`👁️ Robot ${robotVisible ? 'visible' : 'oculto'}`);
+      });
+    }
+
+    if (checkboxAutoCenter) {
+      checkboxAutoCenter.addEventListener('change', function() {
+        autoCenter = this.checked;
+        console.log(`🎯 Auto-centrar: ${autoCenter ? 'activado' : 'desactivado'}`);
+      });
+    }
+
+    // ============================================================================
+    // SISTEMA DE PESTAÑAS
+    // ============================================================================
+
+    const sections = document.querySelectorAll('main > section');
+    const navLinks = document.querySelectorAll('nav a[data-tab]');
+
+    function showTab(tabId) {
+      sections.forEach(section => {
+        section.style.display = (section.id === tabId) ? 'block' : 'none';
+      });
+
+      navLinks.forEach(link => {
+        link.classList.toggle('active', link.dataset.tab === tabId);
+      });
+
+      // Inicializar mapa si es la pestaña de mapa
+      if (tabId === 'mapa' && ros && ros.isConnected && !mapViewer) {
+        setTimeout(initSimpleMap, 100);
+      } else if (tabId !== 'mapa') {
+        // Limpiar mapa al salir de la pestaña
+        cleanupMap();
+      }
+    }
+
+    function getTabFromHash() {
+      const hash = window.location.hash.replace('#', '');
+      const tabIds = Array.from(sections).map(sec => sec.id);
+      return tabIds.includes(hash) ? hash : 'inicio';
+    }
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const tabId = this.getAttribute('href').replace('#', '');
+        window.location.hash = tabId;
+      });
+    });
+
+    window.addEventListener('hashchange', function() {
+      showTab(getTabFromHash());
+    });
+
+    // ============================================================================
+    // INICIALIZACIÓN
+    // ============================================================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('📄 DOM cargado');
+      showTab(getTabFromHash());
+      initROS();
+    });
+
+    // Ajustar canvas al redimensionar ventana
+    window.addEventListener('resize', function() {
+      if (mapCanvas && mapViewer && mapViewer.lastMessage) {
+        mapCanvas.width = mapCanvas.parentElement.clientWidth;
+        mapCanvas.height = mapCanvas.parentElement.clientHeight;
+        drawMap(mapViewer.ctx, mapViewer.lastMessage);
+      }
+    });
+
+    console.log('✅ Dashboard inicializado');
+  </script>
+</body>
+</html>

@@ -1,15 +1,8 @@
-feat(mpu-visualization): Añade panel de gráficas para MPU/IMU con control de límites dinámico
+Añadí un interruptor de habilitación para que el control manual arranque desactivado y solo publique comandos cuando el usuario lo active.
 
-- Se agrega nuevo botón "MPU" en el aside de gráficas, permitiendo visualización de datos de la IMU (tópico /imu/data).
-- Nuevo panel `graficas-mpu` que incluye:
-  - Gráfica de aceleración lineal (m/s²) para ejes X, Y, Z.
-  - Gráfica de velocidad angular (rad/s) para ejes X, Y, Z.
-  - Gráfica de orientación en ángulos de Euler (Roll, Pitch, Yaw) en grados.
-  - Panel de estado actual con valores instantáneos de la IMU.
-- Se añaden controles para límites máximos y mínimos en aceleración y giroscopio, con toggles para activar/desactivar líneas de referencia.
-- Actualización dinámica de los límites reflejada en las gráficas mediante Chart.js annotation plugin.
-- Lógica de suscripción y desconexión eficiente: sólo se consume el tópico /imu/data cuando el panel está visible.
-- La funcionalidad y manejo de límites replica el patrón usado en las gráficas de corriente/motores para una experiencia coherente.
-- Limpieza de memoria y recursos al cambiar de pestaña (unsubscribe correcto).
-
-Closes #mpu-dashboard-panel
+Web Development/prueba.html:321 Coloqué un bloque con el checkbox #control-enable y un mensaje de advertencia que obliga a armar el control antes de usar los mandos.
+Web Development/dashboard.js:527 Capturé el nuevo interruptor y añadí manualControlActivo() para centralizar la verificación de conexión + autorización manual.
+Web Development/dashboard.js:592 Ajusté el intervalo de publicación para que detenga el envío cuando el interruptor está apagado y actualice el estado mostrado.
+Web Development/dashboard.js:634 Reescribí actualizarEstadoControl para habilitar/deshabilitar controles según conexión y armado, actualizando los mensajes de estado.
+Web Development/dashboard.js:672 Modifiqué setTwist, los manejadores de botones y las teclas (Web Development/dashboard.js:708) para respetar el nuevo requisito y añadí un listener (Web Development/dashboard.js:685) que al desactivar envía un Twist de parada.
+Pruebas: no ejecuté pruebas automáticas; revisa en el navegador que el interruptor sea el único medio para habilitar los mandos y que al apagarlo se detenga el robot.

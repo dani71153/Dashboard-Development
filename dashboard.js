@@ -1,38 +1,45 @@
 document.addEventListener('DOMContentLoaded', () => {
+// ========================
+// 1. Estado e integración con ROS (roslibjs)
+// ========================
+const rosStatus   = document.getElementById('ros-status');
+const topicStatus = document.getElementById('topic-status');
+const datosRos    = document.getElementById('datos-ros');
 
-  // ========================
-  // 1. Estado e integración con ROS (roslibjs)
-  // ========================
-  const rosStatus = document.getElementById('ros-status');
-  const topicStatus = document.getElementById('topic-status');
-  const datosRos = document.getElementById('datos-ros');
+if (window.Chart && window['chartjsPluginAnnotation']) {
+  Chart.register(window['chartjsPluginAnnotation']);
+}
 
+if (rosStatus)   rosStatus.textContent = '🔴 Desconectado';
+if (topicStatus) topicStatus.textContent = '—';
 
-  if (window.Chart && window['chartjsPluginAnnotation']) {
-    Chart.register(window['chartjsPluginAnnotation']);
-  }
-  
-  
-  if (rosStatus) rosStatus.textContent = '🔴 Desconectado';
+// EXPONER la misma instancia al resto del dashboard
+window.ros = new ROSLIB.Ros({ url: 'ws://localhost:9090' });
+const ros = window.ros;
+
+// Eventos de conexión
+ros.on('connection', function () {
+  if (rosStatus)   rosStatus.textContent   = '🟢 Conectado';
   if (topicStatus) topicStatus.textContent = '—';
+});
 
-  ros = new ROSLIB.Ros({
-    url: 'ws://localhost:9090'
-  });
-  
+ros.on('close', function () {
+  if (rosStatus)   rosStatus.textContent   = '🔴 Desconectado';
+  if (topicStatus) topicStatus.textContent = '—';
+});
 
-  ros.on('connection', function() {
-    if (rosStatus) rosStatus.textContent = '🟢 Conectado';
-    if (topicStatus) topicStatus.textContent = '—';
-  });
-  ros.on('close', function() {
-    if (rosStatus) rosStatus.textContent = '🔴 Desconectado';
-    if (topicStatus) topicStatus.textContent = '—';
-  });
-  ros.on('error', function() {
-    if (rosStatus) rosStatus.textContent = '⚠️ Error';
-    if (topicStatus) topicStatus.textContent = '—';
-  });
+ros.on('error', function () {
+  if (rosStatus)   rosStatus.textContent   = '⚠️ Error';
+  if (topicStatus) topicStatus.textContent = '—';
+});
+
+// (Opcional) Auto-reconexión simple
+setInterval(() => {
+  try {
+    if (!ros.isConnected) ros.connect('ws://localhost:9090');
+  } catch (_) {}
+}, 3000);
+
 
   // ========================
   // 2. Inicialización de la gráfica Chart.js
@@ -503,7 +510,6 @@ if (window.location.hash.replace('#', '') === 'nodos_topicos') {
   actualizarMonitorDropdownAuto();
 }
 
-
   // ========================
 // 6. Control Manual del Robot (TwistStamped, tópico y frecuencia configurables)
 // ========================
@@ -518,6 +524,7 @@ const sliderAngular = document.getElementById('slider-angular');
 const inputLinear = document.getElementById('input-linear');
 const inputAngular = document.getElementById('input-angular');
 const controlStatus = document.getElementById('control-status');
+const controlEnableToggle = document.getElementById('control-enable');
 
 const topicSelect = document.getElementById('topic-select');
 const publishRate = document.getElementById('publish-rate');
@@ -528,6 +535,14 @@ let cmdVelTopic = null;
 let pubInterval = null;
 let lastCmd = { linear: 0, angular: 0 };
 let currentHz = Number(publishRate.value) || 10;
+
+function manualControlActivo() {
+  if (!ros.isConnected) return false;
+  if (controlEnableToggle) {
+    return controlEnableToggle.checked;
+  }
+  return true;
+}
 
 // --- Sincronizar slider y input (bidireccional) ---
 function syncSliderAndInput(slider, input, min, max) {
@@ -577,10 +592,20 @@ publishRate.addEventListener('change', () => {
 function reiniciarIntervalo() {
   if (pubInterval) clearInterval(pubInterval);
   pubInterval = setInterval(() => {
-    if (!ros.isConnected || !cmdVelTopic) return;
+    if (!cmdVelTopic) return;
+    if (!manualControlActivo()) {
+      if (pubStatus) {
+        pubStatus.textContent = ros.isConnected
+          ? 'Control manual deshabilitado (interruptor apagado).'
+          : 'Sin conexión.';
+      }
+      return;
+    }
     publishTwistStamped(lastCmd.linear, lastCmd.angular);
-    if (pubStatus) pubStatus.textContent =
-      `Enviando a "${topicSelect.value}" a ${currentHz} Hz. Lineal: ${lastCmd.linear}, Angular: ${lastCmd.angular}`;
+    if (pubStatus) {
+      pubStatus.textContent =
+        `Enviando a "${topicSelect.value}" a ${currentHz} Hz. Lineal: ${lastCmd.linear}, Angular: ${lastCmd.angular}`;
+    }
   }, 1000 / currentHz);
 }
 reiniciarIntervalo();
@@ -608,27 +633,44 @@ function publishTwistStamped(linear, angular) {
 // Actualiza el estado de los controles
 function actualizarEstadoControl() {
   const conectado = ros.isConnected;
+  const manualArmado = controlEnableToggle ? controlEnableToggle.checked : true;
+  const habilitado = conectado && manualArmado;
+
   [btnFwd, btnBack, btnLeft, btnRight, btnStop,
-   sliderLinear, sliderAngular, inputLinear, inputAngular,
-   topicSelect, publishRate].forEach(elem => {
+   sliderLinear, sliderAngular, inputLinear, inputAngular].forEach(elem => {
+    if (elem) elem.disabled = !habilitado;
+  });
+
+  [topicSelect, publishRate].forEach(elem => {
     if (elem) elem.disabled = !conectado;
   });
+
   if (controlStatus) {
-    controlStatus.textContent = conectado
-      ? 'Control habilitado. ROS conectado.'
-      : 'Control deshabilitado. ROS no conectado.';
-    controlStatus.style.color = conectado ? "#080" : "#c00";
+    if (!conectado) {
+      controlStatus.textContent = 'Control deshabilitado. ROS no conectado.';
+      controlStatus.style.color = '#c00';
+    } else if (!manualArmado) {
+      controlStatus.textContent = 'Control deshabilitado. Activa el interruptor para enviar comandos.';
+      controlStatus.style.color = '#c60';
+    } else {
+      controlStatus.textContent = 'Control habilitado. ROS conectado.';
+      controlStatus.style.color = '#080';
+    }
   }
   if (pubStatus) {
-    pubStatus.textContent = conectado
-      ? `Enviando a "${topicSelect.value}" a ${currentHz} Hz.`
-      : 'Sin conexión.';
+    if (!conectado) {
+      pubStatus.textContent = 'Sin conexión.';
+    } else if (!manualArmado) {
+      pubStatus.textContent = 'Control manual deshabilitado (interruptor apagado).';
+    } else {
+      pubStatus.textContent = `Enviando a "${topicSelect.value}" a ${currentHz} Hz.`;
+    }
   }
 }
 
 // Botones de movimiento: actualizan el último comando y lo envían una vez
 function setTwist(linear, angular) {
-  if (!ros.isConnected || !cmdVelTopic) return;
+  if (!manualControlActivo() || !cmdVelTopic) return;
   lastCmd = { linear, angular };
   publishTwistStamped(linear, angular); // Publica una vez de inmediato
   // Se seguirá publicando en el intervalo configurado
@@ -640,6 +682,16 @@ if (btnLeft) btnLeft.onclick = () => setTwist(0, Number(inputAngular.value));
 if (btnRight) btnRight.onclick = () => setTwist(0, -Number(inputAngular.value));
 if (btnStop) btnStop.onclick = () => setTwist(0, 0);
 
+if (controlEnableToggle) {
+  controlEnableToggle.addEventListener('change', () => {
+    if (!controlEnableToggle.checked && ros.isConnected && cmdVelTopic) {
+      lastCmd = { linear: 0, angular: 0 };
+      publishTwistStamped(0, 0);
+    }
+    actualizarEstadoControl();
+  });
+}
+
 // Estado inicial
 actualizarEstadoControl();
 
@@ -650,7 +702,7 @@ ros.on('error', actualizarEstadoControl);
 
 // Atajos de teclado: WASD y espacio
 window.addEventListener('keydown', (e) => {
-  if (!ros.isConnected || !cmdVelTopic) return;
+  if (!manualControlActivo() || !cmdVelTopic) return;
   if (e.repeat) return;
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
   switch (e.key.toLowerCase()) {
@@ -661,8 +713,6 @@ window.addEventListener('keydown', (e) => {
     case ' ': setTwist(0, 0); break;
   }
 });
-//Odometria Graficas con Historial
-
 //Odometria Graficas con Historial
 
 // ======================= ODOMETRÍA (solo activa cuando se muestra) =======================
