@@ -151,6 +151,225 @@ nav a.active {
   border-color: rgba(202, 138, 4, 0.45);
 }
 
+#plano_xy {
+  background: var(--bg-secondary);
+}
+
+.xyviz-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.xyviz-sidebar {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.xyviz-stage {
+  flex: 2 1 540px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.xyviz-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.xyviz-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.xyviz-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.xyviz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.xyviz-field input {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 0.4rem 0.55rem;
+  color: var(--text-primary);
+}
+
+.xyviz-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  grid-column: 1 / -1;
+}
+
+.xyviz-btn {
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.xyviz-btn:hover {
+  filter: brightness(1.05);
+}
+
+.xyviz-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.xyviz-btn.primary {
+  background: linear-gradient(120deg, rgba(59, 130, 246, 0.95), rgba(14, 165, 233, 0.85));
+  border-color: rgba(59, 130, 246, 0.6);
+  color: #e7f5ff;
+}
+
+.xyviz-note {
+  font-size: 0.78rem;
+  color: rgba(148, 163, 184, 0.85);
+  line-height: 1.4;
+}
+
+.xyviz-landmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.xyviz-landmark-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.xyviz-landmark-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  background: var(--bg-subtle);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: var(--border-radius-sm);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.xyviz-landmark-item.selected {
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.xyviz-landmark-actions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.xyviz-landmark-item button {
+  border: none;
+  background: transparent;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.xyviz-landmark-item button:hover {
+  text-decoration: underline;
+}
+
+.xyviz-landmark-remove {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.xyviz-selected-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.xyviz-selected-info span {
+  color: var(--text-primary);
+}
+
+.xyviz-canvas-wrap {
+  position: relative;
+  min-height: 420px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid rgba(15, 23, 42, 0.45);
+  background: radial-gradient(circle at 20% 20%, #1e293b 0%, #0f172a 65%, #020817 100%);
+  overflow: hidden;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.45);
+}
+
+.xyviz-canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.xyviz-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  backdrop-filter: blur(6px);
+  color: rgba(226, 232, 240, 0.85);
+  font-size: 0.95rem;
+  padding: var(--spacing-lg);
+  background: rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+}
+
+.xyviz-telemetry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.xyviz-telemetry span {
+  color: var(--text-primary);
+}
+
 /* ============ ESTADO ROS ============ */
 #estado-ros {
   position: fixed;

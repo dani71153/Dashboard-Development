@@ -20,6 +20,27 @@ const xyNameInput = document.getElementById('xy-poi-name');
 const xyXInput = document.getElementById('xy-poi-x');
 const xyYInput = document.getElementById('xy-poi-y');
 const xyYawInput = document.getElementById('xy-poi-yaw');
+const xyvizCanvas = document.getElementById('xyviz-canvas');
+const xyvizPlaceholder = document.getElementById('xyviz-placeholder');
+const xyvizAxisToggle = document.getElementById('xyviz-axis-toggle');
+const xyvizResetViewBtn = document.getElementById('xyviz-reset-view');
+const xyvizLandmarkForm = document.getElementById('xyviz-landmark-form');
+const xyvizLandmarkNameInput = document.getElementById('xyviz-landmark-name');
+const xyvizLandmarkXInput = document.getElementById('xyviz-landmark-x');
+const xyvizLandmarkYInput = document.getElementById('xyviz-landmark-y');
+const xyvizLandmarkYawInput = document.getElementById('xyviz-landmark-yaw');
+const xyvizUseCurrentBtn = document.getElementById('xyviz-use-current');
+const xyvizLandmarkList = document.getElementById('xyviz-landmark-list');
+const xyvizSelectedName = document.getElementById('xyviz-selected-name');
+const xyvizSelectedDistance = document.getElementById('xyviz-selected-distance');
+const xyvizSelectedDx = document.getElementById('xyviz-selected-dx');
+const xyvizSelectedDy = document.getElementById('xyviz-selected-dy');
+const xyvizSelectedDyaw = document.getElementById('xyviz-selected-dyaw');
+const xyvizSelectedDxError = document.getElementById('xyviz-selected-dx-error');
+const xyvizSelectedDyError = document.getElementById('xyviz-selected-dy-error');
+const xyvizSelectedDyawError = document.getElementById('xyviz-selected-dyaw-error');
+const xyvizRobotPoseEl = document.getElementById('xyviz-robot-pose');
+const xyvizLastUpdateEl = document.getElementById('xyviz-last-update');
 const navImuTemp = document.getElementById('nav-imu-temp');
 const lidarStatusChip = document.getElementById('lidar-status-chip');
 const lidarStatusText = document.getElementById('lidar-status-text');
@@ -58,6 +79,11 @@ let xyPoiId = 0;
 let xyWindowResizeHandlerRegistered = false;
 let xyCanvasWidth = 0;
 let xyCanvasHeight = 0;
+const XYVIZ_SCALE_PX_PER_M = 80;
+const XYVIZ_GRID_STEP_METERS = 1;
+const XYVIZ_MAJOR_GRID_EVERY = 5;
+const XYVIZ_TRAIL_LIMIT = 400;
+const XYVIZ_COLORS = ['#38bdf8', '#f97316', '#a855f7', '#10b981', '#f87171', '#eab308'];
 const LIDAR_TOPIC_NAME = '/scan';
 const LIDAR_HEARTBEAT_TIMEOUT_MS = 6000;
 const IMU_TEMP_TOPIC_NAME = '/imu/temp';
@@ -75,6 +101,25 @@ let calibEncodersMonitor = null;
 let calibFilteredMonitor = null;
 let calibImuMonitor = null;
 const CALIB_HEARTBEAT_TIMEOUT_MS = 6000;
+const xyvizState = {
+  canvas: xyvizCanvas,
+  ctx: xyvizCanvas ? xyvizCanvas.getContext('2d') : null,
+  wrap: xyvizCanvas ? xyvizCanvas.parentElement : null,
+  resizeObserver: null,
+  windowResizeHandlerRegistered: false,
+  axisMode: 'standard',
+  scale: XYVIZ_SCALE_PX_PER_M,
+  width: 0,
+  height: 0,
+  origin: { x: 0, y: 0 },
+  robotPose: { x: 0, y: 0, yaw: 0, hasPose: false },
+  trail: [],
+  landmarks: [],
+  nextLandmarkId: 1,
+  selectedId: null
+};
+let xyvizOdomMonitor = null;
+let xyvizInitialized = false;
 const calibracionData = {
   encoders: { x: null, y: null, theta: null, stamp: null },
   filtered: { x: null, y: null, theta: null, stamp: null },
@@ -963,6 +1008,577 @@ function stopImuTempMonitoring(clearDisplay = true) {
 
 setNavImuTempDisplay('off');
 
+function xyvizInit() {
+  if (xyvizInitialized) return;
+  if (!xyvizState.canvas || !xyvizState.ctx) return;
+  xyvizInitialized = true;
+  if (typeof ResizeObserver !== 'undefined' && xyvizState.wrap) {
+    xyvizState.resizeObserver = new ResizeObserver(() => xyvizResizeCanvas());
+    xyvizState.resizeObserver.observe(xyvizState.wrap);
+  } else if (!xyvizState.windowResizeHandlerRegistered) {
+    window.addEventListener('resize', xyvizResizeCanvas);
+    xyvizState.windowResizeHandlerRegistered = true;
+  }
+  xyvizResizeCanvas();
+  xyvizUpdateAxisButton();
+  xyvizUpdateLandmarkList();
+  xyvizUpdateSelectedMetrics();
+  xyvizUpdateUseCurrentAvailability();
+}
+
+function xyvizResizeCanvas() {
+  if (!xyvizState.canvas || !xyvizState.ctx) return;
+  const container = xyvizState.wrap || xyvizState.canvas.parentElement;
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+  const width = Math.max(rect.width, 240);
+  const height = Math.max(rect.height, 240);
+  const ratio = window.devicePixelRatio || 1;
+  xyvizState.width = width;
+  xyvizState.height = height;
+  xyvizState.canvas.width = Math.round(width * ratio);
+  xyvizState.canvas.height = Math.round(height * ratio);
+  xyvizState.canvas.style.width = `${width}px`;
+  xyvizState.canvas.style.height = `${height}px`;
+  xyvizState.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  xyvizResetOrigin();
+  xyvizDrawScene();
+}
+
+function xyvizResetOrigin() {
+  xyvizState.origin = {
+    x: xyvizState.width / 2,
+    y: xyvizState.height / 2
+  };
+}
+
+function xyvizSetPlaceholder(message, visible = true) {
+  if (!xyvizPlaceholder) return;
+  if (typeof message === 'string') {
+    xyvizPlaceholder.textContent = message;
+  }
+  xyvizPlaceholder.style.display = visible ? 'flex' : 'none';
+}
+
+function xyvizUpdateAxisButton() {
+  if (!xyvizAxisToggle) return;
+  if (xyvizState.axisMode === 'standard') {
+    xyvizAxisToggle.textContent = 'Ejes: Horizontal = X · Vertical = Y';
+  } else {
+    xyvizAxisToggle.textContent = 'Ejes: Horizontal = Y · Vertical = X';
+  }
+}
+
+function xyvizToggleAxisMode() {
+  xyvizState.axisMode = xyvizState.axisMode === 'standard' ? 'swapped' : 'standard';
+  xyvizUpdateAxisButton();
+  xyvizDrawScene();
+  xyvizUpdateSelectedMetrics();
+}
+
+function xyvizResetView() {
+  xyvizState.scale = XYVIZ_SCALE_PX_PER_M;
+  xyvizResetOrigin();
+  xyvizDrawScene();
+}
+
+function xyvizUpdateUseCurrentAvailability() {
+  if (!xyvizUseCurrentBtn) return;
+  xyvizUseCurrentBtn.disabled = !xyvizState.robotPose.hasPose;
+}
+
+function xyvizWorldToScreen(wx, wy) {
+  const scale = xyvizState.scale;
+  if (xyvizState.axisMode === 'standard') {
+    return {
+      x: xyvizState.origin.x + wx * scale,
+      y: xyvizState.origin.y - wy * scale
+    };
+  }
+  return {
+    x: xyvizState.origin.x + wy * scale,
+    y: xyvizState.origin.y - wx * scale
+  };
+}
+
+function xyvizDrawScene() {
+  if (!xyvizState.ctx) return;
+  xyvizState.ctx.clearRect(0, 0, xyvizState.width, xyvizState.height);
+  xyvizDrawGrid();
+  xyvizDrawAxes();
+  xyvizDrawTrail();
+  xyvizDrawLandmarks();
+  xyvizDrawRobot();
+}
+
+function xyvizDrawGrid() {
+  if (!xyvizState.ctx) return;
+  const step = XYVIZ_GRID_STEP_METERS;
+  const scale = xyvizState.scale;
+  if (scale <= 0 || step <= 0) return;
+
+  const halfWidthM = xyvizState.width / (2 * scale);
+  const halfHeightM = xyvizState.height / (2 * scale);
+  const extra = step;
+  const maxStepsX = Math.ceil(halfWidthM / step);
+  const maxStepsY = Math.ceil(halfHeightM / step);
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.lineWidth = 1;
+
+  for (let i = 1; i <= maxStepsX; i += 1) {
+    const meters = i * step;
+    const isMajor = i % XYVIZ_MAJOR_GRID_EVERY === 0;
+    const color = isMajor ? 'rgba(59, 130, 246, 0.28)' : 'rgba(148, 163, 184, 0.14)';
+    xyvizStrokeWorldLine(meters, -(halfHeightM + extra), meters, halfHeightM + extra, color);
+    xyvizStrokeWorldLine(-meters, -(halfHeightM + extra), -meters, halfHeightM + extra, color);
+  }
+
+  for (let j = 1; j <= maxStepsY; j += 1) {
+    const meters = j * step;
+    const isMajor = j % XYVIZ_MAJOR_GRID_EVERY === 0;
+    const color = isMajor ? 'rgba(59, 130, 246, 0.28)' : 'rgba(148, 163, 184, 0.14)';
+    xyvizStrokeWorldLine(-(halfWidthM + extra), meters, halfWidthM + extra, meters, color);
+    xyvizStrokeWorldLine(-(halfWidthM + extra), -meters, halfWidthM + extra, -meters, color);
+  }
+
+  xyvizState.ctx.restore();
+}
+
+function xyvizDrawAxes() {
+  if (!xyvizState.ctx) return;
+  const scale = xyvizState.scale;
+  const halfWidthM = xyvizState.width / (2 * scale);
+  const halfHeightM = xyvizState.height / (2 * scale);
+  const extendX = halfWidthM + XYVIZ_GRID_STEP_METERS;
+  const extendY = halfHeightM + XYVIZ_GRID_STEP_METERS;
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.lineWidth = 1.4;
+  xyvizState.ctx.strokeStyle = 'rgba(148, 197, 255, 0.5)';
+
+  if (xyvizState.axisMode === 'standard') {
+    xyvizStrokeWorldLine(0, -extendY, 0, extendY, 'rgba(148, 197, 255, 0.55)', 1.4);
+    xyvizStrokeWorldLine(-extendX, 0, extendX, 0, 'rgba(148, 197, 255, 0.55)', 1.4);
+  } else {
+    xyvizStrokeWorldLine(-extendY, 0, extendY, 0, 'rgba(148, 197, 255, 0.55)', 1.4);
+    xyvizStrokeWorldLine(0, -extendX, 0, extendX, 'rgba(148, 197, 255, 0.55)', 1.4);
+  }
+
+  xyvizState.ctx.restore();
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.fillStyle = 'rgba(191, 219, 254, 0.85)';
+  xyvizState.ctx.font = '11px "Fira Code", monospace';
+
+  const verticalRange = halfHeightM * 0.9;
+  const horizontalRange = halfWidthM * 0.9;
+
+  const verticalPositive = xyvizState.axisMode === 'standard'
+    ? xyvizWorldToScreen(0, verticalRange)
+    : xyvizWorldToScreen(verticalRange, 0);
+  const verticalNegative = xyvizState.axisMode === 'standard'
+    ? xyvizWorldToScreen(0, -verticalRange)
+    : xyvizWorldToScreen(-verticalRange, 0);
+  const horizontalPositive = xyvizState.axisMode === 'standard'
+    ? xyvizWorldToScreen(horizontalRange, 0)
+    : xyvizWorldToScreen(0, horizontalRange);
+  const horizontalNegative = xyvizState.axisMode === 'standard'
+    ? xyvizWorldToScreen(-horizontalRange, 0)
+    : xyvizWorldToScreen(0, -horizontalRange);
+
+  const verticalLabel = xyvizState.axisMode === 'standard' ? 'Y' : 'X';
+  const horizontalLabel = xyvizState.axisMode === 'standard' ? 'X' : 'Y';
+
+  xyvizState.ctx.fillText(`+${verticalLabel}`, verticalPositive.x + 6, verticalPositive.y - 6);
+  xyvizState.ctx.fillText(`-${verticalLabel}`, verticalNegative.x + 6, verticalNegative.y + 12);
+  xyvizState.ctx.fillText(`+${horizontalLabel}`, horizontalPositive.x - 24, horizontalPositive.y - 6);
+  xyvizState.ctx.fillText(`-${horizontalLabel}`, horizontalNegative.x + 6, horizontalNegative.y - 6);
+
+  xyvizState.ctx.restore();
+}
+
+function xyvizStrokeWorldLine(x1, y1, x2, y2, strokeStyle, lineWidth = 1) {
+  if (!xyvizState.ctx) return;
+  const p1 = xyvizWorldToScreen(x1, y1);
+  const p2 = xyvizWorldToScreen(x2, y2);
+  xyvizState.ctx.beginPath();
+  xyvizState.ctx.moveTo(p1.x, p1.y);
+  xyvizState.ctx.lineTo(p2.x, p2.y);
+  xyvizState.ctx.strokeStyle = strokeStyle;
+  xyvizState.ctx.lineWidth = lineWidth;
+  xyvizState.ctx.stroke();
+}
+
+function xyvizDrawTrail() {
+  if (!xyvizState.ctx || !xyvizState.trail.length) return;
+  xyvizState.ctx.save();
+  xyvizState.ctx.lineWidth = 1.4;
+  xyvizState.ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+  xyvizState.ctx.beginPath();
+  xyvizState.trail.forEach((point, index) => {
+    const { x, y } = xyvizWorldToScreen(point.x, point.y);
+    if (index === 0) {
+      xyvizState.ctx.moveTo(x, y);
+    } else {
+      xyvizState.ctx.lineTo(x, y);
+    }
+  });
+  xyvizState.ctx.stroke();
+  xyvizState.ctx.restore();
+}
+
+function xyvizDrawLandmarks() {
+  if (!xyvizState.ctx) return;
+  if (!xyvizState.landmarks.length) return;
+
+  xyvizState.landmarks.forEach(landmark => {
+    const screen = xyvizWorldToScreen(landmark.x, landmark.y);
+    if (screen.x < -60 || screen.x > xyvizState.width + 60 || screen.y < -60 || screen.y > xyvizState.height + 60) {
+      return;
+    }
+
+    xyvizState.ctx.save();
+    xyvizState.ctx.globalAlpha = xyvizState.selectedId === landmark.id ? 0.95 : 0.75;
+    xyvizState.ctx.fillStyle = landmark.color;
+    xyvizState.ctx.beginPath();
+    xyvizState.ctx.arc(screen.x, screen.y, 7, 0, Math.PI * 2);
+    xyvizState.ctx.fill();
+    xyvizState.ctx.lineWidth = xyvizState.selectedId === landmark.id ? 2 : 1.2;
+    xyvizState.ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    xyvizState.ctx.stroke();
+    xyvizState.ctx.restore();
+
+    if (landmark.hasYaw) {
+      xyvizDrawOrientationArrow(landmark.x, landmark.y, landmark.yaw, landmark.color, 0.35);
+    }
+
+    xyvizState.ctx.save();
+    xyvizState.ctx.fillStyle = 'rgba(226, 232, 240, 0.88)';
+    xyvizState.ctx.font = '11px "Fira Code", monospace';
+    const yawText = landmark.hasYaw ? ` · yaw:${radToDeg(landmark.yaw).toFixed(1)}°` : '';
+    xyvizState.ctx.fillText(`${landmark.name} (${landmark.x.toFixed(2)}, ${landmark.y.toFixed(2)})${yawText}`, screen.x + 10, screen.y - 8);
+    xyvizState.ctx.restore();
+  });
+}
+
+function xyvizDrawRobot() {
+  if (!xyvizState.ctx) return;
+  if (!xyvizState.robotPose.hasPose) return;
+  const pose = xyvizState.robotPose;
+  const screen = xyvizWorldToScreen(pose.x, pose.y);
+  if (screen.x < -80 || screen.x > xyvizState.width + 80 || screen.y < -80 || screen.y > xyvizState.height + 80) {
+    return;
+  }
+
+  const arrowSize = Math.max(22, 0.6 * xyvizState.scale);
+  const angle = xyvizComputeScreenAngle(pose.x, pose.y, pose.yaw);
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.translate(screen.x, screen.y);
+  xyvizState.ctx.rotate(angle);
+  xyvizState.ctx.globalAlpha = 0.96;
+  xyvizState.ctx.beginPath();
+  xyvizState.ctx.moveTo(0, -arrowSize * 0.7);
+  xyvizState.ctx.lineTo(arrowSize * 0.5, arrowSize * 0.6);
+  xyvizState.ctx.lineTo(-arrowSize * 0.5, arrowSize * 0.6);
+  xyvizState.ctx.closePath();
+  xyvizState.ctx.fillStyle = 'rgba(96, 165, 250, 0.95)';
+  xyvizState.ctx.fill();
+  xyvizState.ctx.lineWidth = 2.4;
+  xyvizState.ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+  xyvizState.ctx.stroke();
+  xyvizState.ctx.restore();
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.globalAlpha = 0.88;
+  xyvizState.ctx.lineWidth = 1.6;
+  xyvizState.ctx.strokeStyle = 'rgba(147, 197, 253, 0.85)';
+  xyvizState.ctx.beginPath();
+  xyvizState.ctx.arc(screen.x, screen.y, Math.max(10, arrowSize * 0.35), 0, Math.PI * 2);
+  xyvizState.ctx.stroke();
+  xyvizState.ctx.restore();
+}
+
+function xyvizComputeScreenAngle(wx, wy, yaw) {
+  const base = xyvizWorldToScreen(wx, wy);
+  const dir = xyvizWorldToScreen(wx + Math.cos(yaw), wy + Math.sin(yaw));
+  return Math.atan2(dir.y - base.y, dir.x - base.x);
+}
+
+function xyvizDrawOrientationArrow(wx, wy, yaw, color, sizeMeters = 0.45) {
+  if (!xyvizState.ctx) return;
+  if (!Number.isFinite(yaw)) return;
+  const base = xyvizWorldToScreen(wx, wy);
+  const angle = xyvizComputeScreenAngle(wx, wy, yaw);
+  const sizePx = Math.max(16, sizeMeters * xyvizState.scale);
+
+  xyvizState.ctx.save();
+  xyvizState.ctx.translate(base.x, base.y);
+  xyvizState.ctx.rotate(angle);
+  xyvizState.ctx.globalAlpha = 0.85;
+  xyvizState.ctx.beginPath();
+  xyvizState.ctx.moveTo(0, -sizePx * 0.6);
+  xyvizState.ctx.lineTo(sizePx * 0.45, sizePx * 0.5);
+  xyvizState.ctx.lineTo(-sizePx * 0.45, sizePx * 0.5);
+  xyvizState.ctx.closePath();
+  xyvizState.ctx.fillStyle = color;
+  xyvizState.ctx.fill();
+  xyvizState.ctx.restore();
+}
+
+function xyvizAddTrailPoint(x, y) {
+  xyvizState.trail.push({ x, y });
+  if (xyvizState.trail.length > XYVIZ_TRAIL_LIMIT) {
+    xyvizState.trail.splice(0, xyvizState.trail.length - XYVIZ_TRAIL_LIMIT);
+  }
+}
+
+function xyvizAddLandmark({ name, x, y, yaw }) {
+  const trimmed = (name || '').trim();
+  const id = xyvizState.nextLandmarkId++;
+  const yawRad = Number.isFinite(yaw) ? yaw : null;
+  const color = XYVIZ_COLORS[(id - 1) % XYVIZ_COLORS.length];
+  xyvizState.landmarks.push({
+    id,
+    name: trimmed || `Landmark ${id}`,
+    x,
+    y,
+    yaw: yawRad,
+    hasYaw: Number.isFinite(yawRad),
+    color
+  });
+  xyvizState.selectedId = id;
+  xyvizUpdateLandmarkList();
+  xyvizUpdateSelectedMetrics();
+  xyvizDrawScene();
+}
+
+function xyvizRemoveLandmark(id) {
+  xyvizState.landmarks = xyvizState.landmarks.filter(lm => lm.id !== id);
+  if (xyvizState.selectedId === id) {
+    xyvizState.selectedId = xyvizState.landmarks.length ? xyvizState.landmarks[0].id : null;
+  }
+  xyvizUpdateLandmarkList();
+  xyvizUpdateSelectedMetrics();
+  xyvizDrawScene();
+}
+
+function xyvizSelectLandmark(id) {
+  xyvizState.selectedId = id;
+  xyvizUpdateLandmarkList();
+  xyvizUpdateSelectedMetrics();
+}
+
+function xyvizUpdateLandmarkList() {
+  if (!xyvizLandmarkList) return;
+  xyvizLandmarkList.innerHTML = '';
+  if (!xyvizState.landmarks.length) {
+    const empty = document.createElement('div');
+    empty.className = 'xyviz-landmark-empty';
+    empty.textContent = 'Agrega landmarks para monitorear posiciones de referencia.';
+    xyvizLandmarkList.appendChild(empty);
+    return;
+  }
+
+  xyvizState.landmarks.forEach(landmark => {
+    const item = document.createElement('div');
+    item.className = 'xyviz-landmark-item';
+    if (xyvizState.selectedId === landmark.id) {
+      item.classList.add('selected');
+    }
+
+    const meta = document.createElement('span');
+    const yawText = landmark.hasYaw ? ` · yaw:${radToDeg(landmark.yaw).toFixed(1)}°` : '';
+    meta.textContent = `${landmark.name} (${landmark.x.toFixed(2)}, ${landmark.y.toFixed(2)})${yawText}`;
+
+    const actions = document.createElement('div');
+    actions.className = 'xyviz-landmark-actions';
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'xyviz-landmark-select';
+    selectBtn.textContent = 'Seleccionar';
+    selectBtn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      xyvizSelectLandmark(landmark.id);
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'xyviz-landmark-remove';
+    removeBtn.textContent = 'Quitar';
+    removeBtn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      xyvizRemoveLandmark(landmark.id);
+    });
+
+    actions.appendChild(selectBtn);
+    actions.appendChild(removeBtn);
+    item.appendChild(meta);
+    item.appendChild(actions);
+    item.addEventListener('click', () => xyvizSelectLandmark(landmark.id));
+    xyvizLandmarkList.appendChild(item);
+  });
+}
+
+function xyvizUpdateSelectedMetrics() {
+  if (!xyvizSelectedName || !xyvizState.landmarks.length) {
+    return;
+  }
+  const landmark = xyvizState.landmarks.find(lm => lm.id === xyvizState.selectedId);
+  if (!landmark || !xyvizState.robotPose.hasPose) {
+    xyvizSelectedName.textContent = landmark ? landmark.name : '—';
+    xyvizSelectedDistance.textContent = '—';
+    xyvizSelectedDx.textContent = '—';
+    xyvizSelectedDy.textContent = '—';
+    xyvizSelectedDyaw.textContent = landmark && landmark.hasYaw ? '—' : 'N/A';
+    xyvizSelectedDxError.textContent = '—';
+    xyvizSelectedDyError.textContent = '—';
+    xyvizSelectedDyawError.textContent = landmark && landmark.hasYaw ? '—' : 'N/A';
+    return;
+  }
+
+  const pose = xyvizState.robotPose;
+  const dx = pose.x - landmark.x;
+  const dy = pose.y - landmark.y;
+  const distance = Math.hypot(dx, dy);
+  const yawDesired = landmark.hasYaw ? landmark.yaw : null;
+  const yawDiff = landmark.hasYaw ? normalizeAngle(pose.yaw - yawDesired) : null;
+
+  const errX = computePercentError(landmark.x, pose.x);
+  const errY = computePercentError(landmark.y, pose.y);
+  const errYaw = Number.isFinite(yawDesired) ? computePercentError(yawDesired, pose.yaw) : null;
+
+  xyvizSelectedName.textContent = landmark.name;
+  xyvizSelectedDistance.textContent = Number.isFinite(distance) ? formatLinear(distance) : '—';
+  xyvizSelectedDx.textContent = formatLinearDiff(dx);
+  xyvizSelectedDy.textContent = formatLinearDiff(dy);
+  xyvizSelectedDyaw.textContent = landmark.hasYaw ? formatAngleDiff(yawDiff) : 'N/A';
+  xyvizSelectedDxError.textContent = Number.isFinite(errX) ? formatPercent(errX) : '—';
+  xyvizSelectedDyError.textContent = Number.isFinite(errY) ? formatPercent(errY) : '—';
+  xyvizSelectedDyawError.textContent = landmark.hasYaw && Number.isFinite(errYaw) ? formatPercent(errYaw) : (landmark.hasYaw ? '—' : 'N/A');
+}
+
+function xyvizHandleLandmarkSubmit(event) {
+  event.preventDefault();
+  if (!xyvizLandmarkNameInput || !xyvizLandmarkXInput || !xyvizLandmarkYInput) return;
+  const rawName = xyvizLandmarkNameInput.value;
+  const rawX = Number.parseFloat(xyvizLandmarkXInput.value);
+  const rawY = Number.parseFloat(xyvizLandmarkYInput.value);
+  const rawYawDeg = Number.parseFloat(xyvizLandmarkYawInput?.value ?? '');
+  const x = Number.isFinite(rawX) ? rawX : 0;
+  const y = Number.isFinite(rawY) ? rawY : 0;
+  const yaw = Number.isFinite(rawYawDeg) ? degToRad(rawYawDeg) : null;
+  xyvizAddLandmark({ name: rawName, x, y, yaw });
+  if (xyvizLandmarkNameInput) xyvizLandmarkNameInput.value = '';
+  if (xyvizLandmarkXInput) xyvizLandmarkXInput.value = '0';
+  if (xyvizLandmarkYInput) xyvizLandmarkYInput.value = '0';
+  if (xyvizLandmarkYawInput) xyvizLandmarkYawInput.value = '0';
+}
+
+function xyvizHandleUseCurrent() {
+  if (!xyvizUseCurrentBtn) return;
+  if (!xyvizState.robotPose.hasPose) return;
+  const pose = xyvizState.robotPose;
+  if (xyvizLandmarkNameInput) {
+    const timestamp = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    xyvizLandmarkNameInput.value = `Pose ${timestamp}`;
+  }
+  if (xyvizLandmarkXInput) xyvizLandmarkXInput.value = pose.x.toFixed(3);
+  if (xyvizLandmarkYInput) xyvizLandmarkYInput.value = pose.y.toFixed(3);
+  if (xyvizLandmarkYawInput) xyvizLandmarkYawInput.value = radToDeg(pose.yaw).toFixed(1);
+}
+
+function xyvizUpdateRobotTelemetry(stamp) {
+  if (!xyvizRobotPoseEl || !xyvizLastUpdateEl) return;
+  if (!xyvizState.robotPose.hasPose) {
+    xyvizRobotPoseEl.textContent = '—';
+    xyvizLastUpdateEl.textContent = '—';
+    return;
+  }
+  const pose = xyvizState.robotPose;
+  xyvizRobotPoseEl.textContent = `x:${pose.x.toFixed(3)} m · y:${pose.y.toFixed(3)} m · yaw:${radToDeg(pose.yaw).toFixed(1)}°`;
+  xyvizLastUpdateEl.textContent = formatTimestamp(stamp);
+}
+
+function startPlanoMonitoring() {
+  if (!xyvizState.canvas || !xyvizState.ctx) return;
+  xyvizInit();
+  if (!window.ros || !window.ros.isConnected) return;
+  if (xyvizOdomMonitor) return;
+  xyvizSetPlaceholder('Esperando datos de /odometry/filtered…', true);
+  xyvizOdomMonitor = new ROSLIB.Topic({
+    ros: window.ros,
+    name: '/odometry/filtered',
+    messageType: 'nav_msgs/Odometry',
+    queue_length: 1,
+    throttle_rate: 0
+  });
+  xyvizOdomMonitor.subscribe(handlePlanoOdom);
+}
+
+function stopPlanoMonitoring(clearData = false) {
+  if (xyvizOdomMonitor) {
+    xyvizOdomMonitor.unsubscribe();
+    xyvizOdomMonitor = null;
+  }
+  if (clearData) {
+    xyvizState.robotPose = { x: 0, y: 0, yaw: 0, hasPose: false };
+    xyvizState.trail = [];
+    xyvizUpdateRobotTelemetry(null);
+    xyvizUpdateUseCurrentAvailability();
+    xyvizUpdateSelectedMetrics();
+    xyvizDrawScene();
+    xyvizSetPlaceholder('Conéctate a ROS para visualizar el plano.', true);
+  } else if (xyvizState.canvas && document.getElementById('plano_xy')) {
+    const rosConnected = !!(window.ros && window.ros.isConnected);
+    const message = rosConnected
+      ? 'Pestaña inactiva. Selecciona Plano XY para reanudar.'
+      : 'Conéctate a ROS para visualizar el plano.';
+    xyvizSetPlaceholder(message, true);
+  }
+}
+
+function updatePlanoMonitoring() {
+  if (!window.ros || !window.ros.isConnected) {
+    stopPlanoMonitoring(false);
+    return;
+  }
+  if (activeTab === 'plano_xy') {
+    startPlanoMonitoring();
+  } else {
+    stopPlanoMonitoring(false);
+  }
+}
+
+function handlePlanoOdom(msg) {
+  if (!msg) return;
+  const position = msg?.pose?.pose?.position;
+  const orientation = msg?.pose?.pose?.orientation || {};
+  const stamp = rosTimeToDate(msg?.header?.stamp) ?? new Date();
+
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  const yaw = quaternionToYaw(orientation);
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(yaw)) return;
+
+  xyvizState.robotPose = { x, y, yaw, hasPose: true };
+  xyvizAddTrailPoint(x, y);
+  xyvizUpdateRobotTelemetry(stamp);
+  xyvizUpdateUseCurrentAvailability();
+  xyvizUpdateSelectedMetrics();
+  xyvizDrawScene();
+  xyvizSetPlaceholder('', false);
+}
+
+xyvizSetPlaceholder('Conéctate a ROS para visualizar el plano.', true);
+xyvizUpdateUseCurrentAvailability();
+xyvizUpdateAxisButton();
+
 // --- Calibración (odometría e IMU) ---
 function clearCalibStatusTimer(key) {
   const entry = calibStatus[key];
@@ -1607,6 +2223,7 @@ ros.on('connection', function () {
   startLidarMonitoring();
   startImuTempMonitoring();
   updateCalibracionMonitoring();
+  updatePlanoMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
   }
@@ -1619,6 +2236,7 @@ ros.on('close', function () {
   stopLidarMonitoring();
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
+  stopPlanoMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -1632,6 +2250,7 @@ ros.on('error', function () {
   stopLidarMonitoring();
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
+  stopPlanoMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -1733,7 +2352,12 @@ function showTab(tabId) {
     ensureRos2dViewer();
   }
 
+  if (tabId === 'plano_xy') {
+    xyvizInit();
+  }
+
   updateCalibracionMonitoring();
+  updatePlanoMonitoring();
 }
 
 function getTabFromHash() {
@@ -1769,6 +2393,22 @@ const slamServiceButtons = document.querySelectorAll('.slam-action-btn[data-slam
 slamServiceButtons.forEach(btn => {
   btn.addEventListener('click', () => executeSlamServiceButton(btn));
 });
+
+if (xyvizAxisToggle) {
+  xyvizAxisToggle.addEventListener('click', xyvizToggleAxisMode);
+}
+
+if (xyvizResetViewBtn) {
+  xyvizResetViewBtn.addEventListener('click', xyvizResetView);
+}
+
+if (xyvizLandmarkForm) {
+  xyvizLandmarkForm.addEventListener('submit', xyvizHandleLandmarkSubmit);
+}
+
+if (xyvizUseCurrentBtn) {
+  xyvizUseCurrentBtn.addEventListener('click', () => xyvizHandleUseCurrent());
+}
 
 if (xyPoiForm) {
   xyPoiForm.addEventListener('submit', event => {

@@ -2,5 +2,3 @@ Añadí un chip de estado por tópico en cada tarjeta de Calibración (prueba.ht
 
 Agregué un termómetro en la barra superior que lee /imu/temp y marca su estado de recepción: el markup y layout flexible viven en prueba.html:27 y dashboard.css:61, con el chip estilizado en dashboard.css:117. La lógica se integra en dashboard.js:23 y dashboard.js:854, donde se inicializa el monitor, se aceptan mensajes sensor_msgs/Temperature (o valores en data/temp) y se muestran estados esperando, recibiendo o sin datos recientes; la suscripción se arranca/alivia junto con el ciclo de conexión de ROS (dashboard.js:1589, dashboard.js:1599). Prueba ejecutada: node --check dashboard.js.
 
-Siguiente paso sugerido: 1) Con ROSBridge activo, confirma que /imu/temp entrega datos y que el chip pasa por los distintos estados; si tu driver publica std_msgs/Float32, no necesitas cambios porque el código ya lee data, pero puedes ajustar IMU_TEMP_TOPIC_NAME o el messageType si usas otro esquema.
-

@@ -33,6 +33,7 @@ les -->
       <li><a href="#nodos_topicos" data-tab="nodos">Nodos</a></li>
       <li><a href="#monitoreo" data-tab="monitoreo">Monitoreo</a></li> <!-- NUEVO -->
       <li><a href="#control" data-tab="control">Control</a></li>
+      <li><a href="#plano_xy" data-tab="plano_xy">Plano XY</a></li>
       <li><a href="#calibracion" data-tab="calibracion">Calibración</a></li>
       <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
     </ul>
@@ -379,6 +380,69 @@ les -->
       </div>
     </section>
     
+    <section id="plano_xy" style="display:none;">
+      <h2>Plano XY Interactivo</h2>
+      <div class="xyviz-layout">
+        <aside class="xyviz-sidebar">
+          <div class="xyviz-card">
+            <h3>Opciones de vista</h3>
+            <button type="button" id="xyviz-axis-toggle" class="xyviz-btn">Ejes: X↔Y</button>
+            <button type="button" id="xyviz-reset-view" class="xyviz-btn">Recentrar vista</button>
+            <small class="xyviz-note">El modo estándar muestra eje X horizontal y eje Y vertical. Con el botón puedes intercambiarlos dinámicamente.</small>
+          </div>
+          <div class="xyviz-card">
+            <h3>Landmarks</h3>
+            <form id="xyviz-landmark-form" class="xyviz-form">
+              <label class="xyviz-field">
+                <span>Nombre</span>
+                <input type="text" id="xyviz-landmark-name" maxlength="32" placeholder="Punto" required>
+              </label>
+              <label class="xyviz-field">
+                <span>X (m)</span>
+                <input type="number" id="xyviz-landmark-x" step="0.01" value="0" required>
+              </label>
+              <label class="xyviz-field">
+                <span>Y (m)</span>
+                <input type="number" id="xyviz-landmark-y" step="0.01" value="0" required>
+              </label>
+              <label class="xyviz-field">
+                <span>Yaw (°)</span>
+                <input type="number" id="xyviz-landmark-yaw" step="1" value="0">
+              </label>
+              <div class="xyviz-form-actions">
+                <button type="submit" class="xyviz-btn primary">Agregar landmark</button>
+                <button type="button" id="xyviz-use-current" class="xyviz-btn">Usar robot actual</button>
+              </div>
+            </form>
+            <div id="xyviz-landmark-list" class="xyviz-landmark-list">
+              <div class="xyviz-landmark-empty">Agrega landmarks para monitorear posiciones de referencia.</div>
+            </div>
+          </div>
+          <div class="xyviz-card">
+            <h3>Distancias al landmark</h3>
+            <div class="xyviz-selected-info">
+              <div><strong>Seleccionado:</strong> <span id="xyviz-selected-name">—</span></div>
+              <div>Distancia: <span id="xyviz-selected-distance">—</span></div>
+              <div>ΔX: <span id="xyviz-selected-dx">—</span> · Error: <span id="xyviz-selected-dx-error">—</span></div>
+              <div>ΔY: <span id="xyviz-selected-dy">—</span> · Error: <span id="xyviz-selected-dy-error">—</span></div>
+              <div>ΔYaw: <span id="xyviz-selected-dyaw">—</span> · Error: <span id="xyviz-selected-dyaw-error">—</span></div>
+            </div>
+            <small class="xyviz-note">El cálculo de error replica la pestaña de Calibración, tomando la posición del landmark como valor deseado.</small>
+          </div>
+        </aside>
+        <div class="xyviz-stage">
+          <div class="xyviz-canvas-wrap">
+            <canvas id="xyviz-canvas"></canvas>
+            <div class="xyviz-placeholder" id="xyviz-placeholder">Conéctate a ROS para visualizar el plano.</div>
+          </div>
+          <div class="xyviz-telemetry">
+            <div>Robot: <span id="xyviz-robot-pose">—</span></div>
+            <div>Lectura: <span id="xyviz-last-update">—</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
 
     <section id="calibracion" style="display:none;">
       <h2>Calibración</h2>
