@@ -25,6 +25,8 @@ const xyvizPlaceholder = document.getElementById('xyviz-placeholder');
 const xyvizAxisToggle = document.getElementById('xyviz-axis-toggle');
 const xyvizResetViewBtn = document.getElementById('xyviz-reset-view');
 const xyvizLandmarkForm = document.getElementById('xyviz-landmark-form');
+const xyvizZoomInBtn = document.getElementById('xyviz-zoom-in');
+const xyvizZoomOutBtn = document.getElementById('xyviz-zoom-out');
 const xyvizLandmarkNameInput = document.getElementById('xyviz-landmark-name');
 const xyvizLandmarkXInput = document.getElementById('xyviz-landmark-x');
 const xyvizLandmarkYInput = document.getElementById('xyviz-landmark-y');
@@ -112,11 +114,15 @@ const xyvizState = {
   width: 0,
   height: 0,
   origin: { x: 0, y: 0 },
+  panOffset: { x: 0, y: 0 },
   robotPose: { x: 0, y: 0, yaw: 0, hasPose: false },
   trail: [],
   landmarks: [],
   nextLandmarkId: 1,
-  selectedId: null
+  selectedId: null,
+  isPanning: false,
+  panStart: { x: 0, y: 0 },
+  panOriginSnapshot: { x: 0, y: 0 }
 };
 let xyvizOdomMonitor = null;
 let xyvizInitialized = false;
@@ -1024,6 +1030,7 @@ function xyvizInit() {
   xyvizUpdateLandmarkList();
   xyvizUpdateSelectedMetrics();
   xyvizUpdateUseCurrentAvailability();
+  xyvizRegisterCanvasEvents();
 }
 
 function xyvizResizeCanvas() {
@@ -1042,13 +1049,14 @@ function xyvizResizeCanvas() {
   xyvizState.canvas.style.height = `${height}px`;
   xyvizState.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   xyvizResetOrigin();
+  xyvizState.panOffset = { x: 0, y: 0 };
   xyvizDrawScene();
 }
 
 function xyvizResetOrigin() {
   xyvizState.origin = {
-    x: xyvizState.width / 2,
-    y: xyvizState.height / 2
+    x: xyvizState.width / 2 + xyvizState.panOffset.x,
+    y: xyvizState.height / 2 + xyvizState.panOffset.y
   };
 }
 
@@ -1078,6 +1086,7 @@ function xyvizToggleAxisMode() {
 
 function xyvizResetView() {
   xyvizState.scale = XYVIZ_SCALE_PX_PER_M;
+  xyvizState.panOffset = { x: 0, y: 0 };
   xyvizResetOrigin();
   xyvizDrawScene();
 }
@@ -1334,6 +1343,127 @@ function xyvizAddTrailPoint(x, y) {
   }
 }
 
+function xyvizScreenToWorld(sx, sy) {
+  const scale = xyvizState.scale;
+  if (xyvizState.axisMode === 'standard') {
+    return {
+      x: (sx - xyvizState.origin.x) / scale,
+      y: (xyvizState.origin.y - sy) / scale
+    };
+  }
+  return {
+    x: (xyvizState.origin.y - sy) / scale,
+    y: (sx - xyvizState.origin.x) / scale
+  };
+}
+
+function xyvizRegisterCanvasEvents() {
+  if (!xyvizState.canvas) return;
+  xyvizState.canvas.addEventListener('wheel', xyvizHandleWheel, { passive: false });
+  xyvizState.canvas.addEventListener('mousedown', xyvizHandlePointerDown);
+  xyvizState.canvas.addEventListener('mousemove', xyvizHandlePointerMove);
+  xyvizState.canvas.addEventListener('mouseup', xyvizHandlePointerUp);
+  xyvizState.canvas.addEventListener('mouseleave', xyvizHandlePointerUp);
+  xyvizState.canvas.addEventListener('touchstart', xyvizHandleTouchStart, { passive: false });
+  xyvizState.canvas.addEventListener('touchmove', xyvizHandleTouchMove, { passive: false });
+  xyvizState.canvas.addEventListener('touchend', xyvizHandlePointerUp, { passive: false });
+  window.addEventListener('keydown', xyvizHandleKeyPan);
+}
+
+function xyvizHandleWheel(event) {
+  event.preventDefault();
+  const delta = Math.sign(event.deltaY);
+  const factor = delta > 0 ? 0.9 : 1.1;
+  xyvizApplyZoom(factor, event.offsetX, event.offsetY);
+}
+
+function xyvizApplyZoom(factor, centerX, centerY) {
+  const previousScale = xyvizState.scale;
+  const newScale = Math.min(Math.max(previousScale * factor, 10), 400);
+  if (newScale === previousScale) return;
+  const worldBefore = xyvizScreenToWorld(centerX, centerY);
+  xyvizState.scale = newScale;
+  const newScreen = xyvizWorldToScreen(worldBefore.x, worldBefore.y);
+  xyvizState.panOffset.x += centerX - newScreen.x;
+  xyvizState.panOffset.y += centerY - newScreen.y;
+  xyvizResetOrigin();
+  xyvizDrawScene();
+}
+
+function xyvizHandlePointerDown(event) {
+  event.preventDefault();
+  xyvizState.isPanning = true;
+  xyvizState.panStart = { x: event.clientX, y: event.clientY };
+  xyvizState.panOriginSnapshot = { ...xyvizState.panOffset };
+}
+
+function xyvizHandlePointerMove(event) {
+  if (!xyvizState.isPanning) return;
+  event.preventDefault();
+  const dx = event.clientX - xyvizState.panStart.x;
+  const dy = event.clientY - xyvizState.panStart.y;
+  xyvizState.panOffset = {
+    x: xyvizState.panOriginSnapshot.x + dx,
+    y: xyvizState.panOriginSnapshot.y + dy
+  };
+  xyvizResetOrigin();
+  xyvizDrawScene();
+}
+
+function xyvizHandlePointerUp() {
+  xyvizState.isPanning = false;
+}
+
+function xyvizHandleTouchStart(event) {
+  if (event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  xyvizState.isPanning = true;
+  xyvizState.panStart = { x: touch.clientX, y: touch.clientY };
+  xyvizState.panOriginSnapshot = { ...xyvizState.panOffset };
+}
+
+function xyvizHandleTouchMove(event) {
+  if (!xyvizState.isPanning || event.touches.length !== 1) return;
+  event.preventDefault();
+  const touch = event.touches[0];
+  const dx = touch.clientX - xyvizState.panStart.x;
+  const dy = touch.clientY - xyvizState.panStart.y;
+  xyvizState.panOffset = {
+    x: xyvizState.panOriginSnapshot.x + dx,
+    y: xyvizState.panOriginSnapshot.y + dy
+  };
+  xyvizResetOrigin();
+  xyvizDrawScene();
+}
+
+function xyvizHandleKeyPan(event) {
+  if (activeTab !== 'plano_xy') return;
+  const stepPixels = 40;
+  let moved = false;
+  switch (event.key.toLowerCase()) {
+    case 'w':
+      xyvizState.panOffset.y += stepPixels;
+      moved = true;
+      break;
+    case 's':
+      xyvizState.panOffset.y -= stepPixels;
+      moved = true;
+      break;
+    case 'a':
+      xyvizState.panOffset.x += stepPixels;
+      moved = true;
+      break;
+    case 'd':
+      xyvizState.panOffset.x -= stepPixels;
+      moved = true;
+      break;
+  }
+  if (moved) {
+    xyvizResetOrigin();
+    xyvizDrawScene();
+  }
+}
+
 function xyvizAddLandmark({ name, x, y, yaw }) {
   const trimmed = (name || '').trim();
   const id = xyvizState.nextLandmarkId++;
@@ -1528,6 +1658,8 @@ function stopPlanoMonitoring(clearData = false) {
   if (clearData) {
     xyvizState.robotPose = { x: 0, y: 0, yaw: 0, hasPose: false };
     xyvizState.trail = [];
+    xyvizState.panOffset = { x: 0, y: 0 };
+    xyvizResetOrigin();
     xyvizUpdateRobotTelemetry(null);
     xyvizUpdateUseCurrentAvailability();
     xyvizUpdateSelectedMetrics();
@@ -2400,6 +2532,14 @@ if (xyvizAxisToggle) {
 
 if (xyvizResetViewBtn) {
   xyvizResetViewBtn.addEventListener('click', xyvizResetView);
+}
+
+if (xyvizZoomInBtn) {
+  xyvizZoomInBtn.addEventListener('click', () => xyvizApplyZoom(1.15, xyvizState.width / 2, xyvizState.height / 2));
+}
+
+if (xyvizZoomOutBtn) {
+  xyvizZoomOutBtn.addEventListener('click', () => xyvizApplyZoom(0.85, xyvizState.width / 2, xyvizState.height / 2));
 }
 
 if (xyvizLandmarkForm) {

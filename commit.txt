@@ -1,4 +1,7 @@
-Añadí un chip de estado por tópico en cada tarjeta de Calibración (prueba.html:433, prueba.html:456, prueba.html:487) y los estilos asociados (dashboard.css:916, dashboard.css:940). La lógica JS ahora gestiona timers/heartbeat por tópico: al abrir la pestaña, los chips pasan a “Esperando datos”; tras el primer mensaje cambian a “Recibiendo”, caducan a “Sin datos recientes” si no llega nada y se ponen en “En pausa” al salir de la pestaña o “Sin conexión” ante desconexión (dashboard.js:27, dashboard.js:71, dashboard.js:650). Prueba ejecutada: node --check dashboard.js.
+Sumé zoom y paneo al plano XY: ahora puedes acercar/alejar con los botones o la rueda del mouse, arrastrar para mover la vista y usar WASD para desplazarla; todo recalcula la cuadrícula y mantiene los landmarks visibles. También se actualizó la inicialización para registrar los gestos y resetear la vista/offset al desconectarse.
 
-Agregué un termómetro en la barra superior que lee /imu/temp y marca su estado de recepción: el markup y layout flexible viven en prueba.html:27 y dashboard.css:61, con el chip estilizado en dashboard.css:117. La lógica se integra en dashboard.js:23 y dashboard.js:854, donde se inicializa el monitor, se aceptan mensajes sensor_msgs/Temperature (o valores en data/temp) y se muestran estados esperando, recibiendo o sin datos recientes; la suscripción se arranca/alivia junto con el ciclo de conexión de ROS (dashboard.js:1589, dashboard.js:1599). Prueba ejecutada: node --check dashboard.js.
+Cambios clave:
 
+prueba.html:389-390 añade los botones de zoom y la nota de interacción.
+dashboard.css:228-307 incorpora estilos para los controles y estados deshabilitados.
+dashboard.js:23-1579 introduce estado de zoom/pan, eventos de rueda y arrastre, cálculo inverso pantalla→mundo y ajustes en el render y telemetría.
