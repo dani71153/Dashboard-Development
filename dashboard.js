@@ -20,6 +20,10 @@ const xyNameInput = document.getElementById('xy-poi-name');
 const xyXInput = document.getElementById('xy-poi-x');
 const xyYInput = document.getElementById('xy-poi-y');
 const xyYawInput = document.getElementById('xy-poi-yaw');
+const lidarStatusChip = document.getElementById('lidar-status-chip');
+const lidarStatusText = document.getElementById('lidar-status-text');
+const lidarStartBtn = document.getElementById('btn-lidar-start');
+const lidarStopBtn = document.getElementById('btn-lidar-stop');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
@@ -40,6 +44,14 @@ let xyPoiId = 0;
 let xyWindowResizeHandlerRegistered = false;
 let xyCanvasWidth = 0;
 let xyCanvasHeight = 0;
+const LIDAR_TOPIC_NAME = '/scan';
+const LIDAR_HEARTBEAT_TIMEOUT_MS = 6000;
+let lidarScanMonitor = null;
+let lidarHeartbeatTimer = null;
+let lidarStartService = null;
+let lidarStopService = null;
+let lidarState = 'off';
+let lidarActionInFlight = false;
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -112,8 +124,8 @@ function startSlamMonitoring() {
   if (!slamPoseMonitor) {
     slamPoseMonitor = new ROSLIB.Topic({
       ros: window.ros,
-      name: '/pose',
-      messageType: 'geometry_msgs/PoseWithCovarianceStamped',
+      name: '/slam_toolbox/pose',
+      messageType: 'geometry_msgs/PoseStamped',
       queue_length: 1,
       throttle_rate: 1500
     });
@@ -589,6 +601,176 @@ function destroyRos2dViewer() {
   clearXYRobotPose();
 }
 
+// --- LiDAR monitoring & motor control ---
+function refreshLidarControls() {
+  const rosConnected = !!(window.ros && window.ros.isConnected);
+  const disableAll = !rosConnected || lidarActionInFlight;
+  if (lidarStartBtn) {
+    lidarStartBtn.disabled = disableAll || lidarState === 'running';
+  }
+  if (lidarStopBtn) {
+    lidarStopBtn.disabled = disableAll || lidarState !== 'running';
+  }
+}
+
+function setLidarState(state, message) {
+  lidarState = state;
+  if (lidarStatusChip) {
+    lidarStatusChip.classList.remove('lidar-status-off', 'lidar-status-stopped', 'lidar-status-running');
+    let chipClass = 'lidar-status-off';
+    let label = 'Apagado';
+    if (state === 'running') {
+      chipClass = 'lidar-status-running';
+      label = 'Funcionando';
+    } else if (state === 'stopped') {
+      chipClass = 'lidar-status-stopped';
+      label = 'Detenido';
+    }
+    lidarStatusChip.classList.add(chipClass);
+    lidarStatusChip.textContent = label;
+  }
+  if (lidarStatusText) {
+    if (typeof message === 'string' && message.length) {
+      lidarStatusText.textContent = message;
+    } else {
+      let defaultMsg = 'Sin conexión con ROS.';
+      if (state === 'running') {
+        defaultMsg = 'Recibiendo datos del LiDAR.';
+      } else if (state === 'stopped') {
+        defaultMsg = 'LiDAR disponible, sin datos recientes.';
+      }
+      lidarStatusText.textContent = defaultMsg;
+    }
+  }
+  refreshLidarControls();
+}
+
+function rosTimeToDate(stamp) {
+  if (!stamp) return null;
+  const sec = Number(stamp.sec ?? stamp.secs ?? 0);
+  const nanosec = Number(stamp.nanosec ?? stamp.nsecs ?? 0);
+  if (!Number.isFinite(sec) || !Number.isFinite(nanosec)) return null;
+  return new Date(sec * 1000 + Math.floor(nanosec / 1e6));
+}
+
+function markLidarHeartbeat(msg) {
+  const timestamp = rosTimeToDate(msg?.header?.stamp) ?? new Date();
+  const hora = timestamp.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  setLidarState('running', `Última lectura /scan: ${hora}`);
+  if (lidarHeartbeatTimer) clearTimeout(lidarHeartbeatTimer);
+  lidarHeartbeatTimer = setTimeout(() => {
+    setLidarState('stopped', `Sin datos recientes de /scan (> ${Math.round(LIDAR_HEARTBEAT_TIMEOUT_MS / 1000)} s).`);
+  }, LIDAR_HEARTBEAT_TIMEOUT_MS);
+}
+
+function startLidarMonitoring() {
+  if (!window.ros || !window.ros.isConnected) return;
+  if (!lidarScanMonitor) {
+    lidarScanMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: LIDAR_TOPIC_NAME,
+      messageType: 'sensor_msgs/LaserScan',
+      queue_length: 1,
+      throttle_rate: 0
+    });
+    lidarScanMonitor.subscribe(msg => {
+      markLidarHeartbeat(msg);
+    });
+  }
+  setLidarState('stopped', 'Sin lecturas recientes de /scan.');
+}
+
+function stopLidarMonitoring() {
+  if (lidarHeartbeatTimer) {
+    clearTimeout(lidarHeartbeatTimer);
+    lidarHeartbeatTimer = null;
+  }
+  if (lidarScanMonitor) {
+    lidarScanMonitor.unsubscribe();
+    lidarScanMonitor = null;
+  }
+  lidarStartService = null;
+  lidarStopService = null;
+  lidarActionInFlight = false;
+  setLidarState('off', 'Sin conexión con ROS.');
+}
+
+function ensureLidarServices() {
+  if (!window.ros || !window.ros.isConnected) return false;
+  if (!lidarStartService) {
+    lidarStartService = new ROSLIB.Service({
+      ros: window.ros,
+      name: '/start_motor',
+      serviceType: 'std_srvs/srv/Empty'
+    });
+  }
+  if (!lidarStopService) {
+    lidarStopService = new ROSLIB.Service({
+      ros: window.ros,
+      name: '/stop_motor',
+      serviceType: 'std_srvs/srv/Empty'
+    });
+  }
+  return true;
+}
+
+function handleLidarStartClick() {
+  if (!window.ros || !window.ros.isConnected) {
+    setLidarState('off', 'Sin conexión con ROS. Conéctate antes de encender el LiDAR.');
+    return;
+  }
+  const previousState = lidarState;
+  if (!ensureLidarServices()) {
+    setLidarState('off', 'No se pudo inicializar el cliente ROS. Verifica la conexión.');
+    return;
+  }
+  lidarActionInFlight = true;
+  refreshLidarControls();
+  setLidarState('stopped', 'Solicitando arranque del LiDAR...');
+  lidarStartService.callService(new ROSLIB.ServiceRequest({}), () => {
+    lidarActionInFlight = false;
+    setLidarState('stopped', 'Motor arrancado. Esperando lecturas de /scan...');
+  }, error => {
+    lidarActionInFlight = false;
+    setLidarState(previousState, `Error al encender el LiDAR: ${error}`);
+  });
+}
+
+function handleLidarStopClick() {
+  if (!window.ros || !window.ros.isConnected) {
+    setLidarState('off', 'Sin conexión con ROS. Conéctate antes de detener el LiDAR.');
+    return;
+  }
+  const previousState = lidarState;
+  if (!ensureLidarServices()) {
+    setLidarState('off', 'No se pudo inicializar el cliente ROS. Verifica la conexión.');
+    return;
+  }
+  lidarActionInFlight = true;
+  refreshLidarControls();
+  setLidarState('running', 'Solicitando parada del LiDAR...');
+  lidarStopService.callService(new ROSLIB.ServiceRequest({}), () => {
+    lidarActionInFlight = false;
+    setLidarState('stopped', 'Motor detenido. El LiDAR no está emitiendo escaneos.');
+  }, error => {
+    lidarActionInFlight = false;
+    setLidarState(previousState, `Error al detener el LiDAR: ${error}`);
+  });
+}
+
+if (lidarStartBtn) {
+  lidarStartBtn.addEventListener('click', handleLidarStartClick);
+}
+if (lidarStopBtn) {
+  lidarStopBtn.addEventListener('click', handleLidarStopClick);
+}
+
+refreshLidarControls();
+
 function showSlamServiceFeedback(text, isError = false) {
   if (!slamServiceFeedback) return;
   slamServiceFeedback.textContent = text;
@@ -730,6 +912,7 @@ ros.on('connection', function () {
   if (rosStatus)   rosStatus.textContent   = '🟢 Conectado';
   if (topicStatus) topicStatus.textContent = '—';
   startSlamMonitoring();
+  startLidarMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
   }
@@ -739,6 +922,7 @@ ros.on('close', function () {
   if (rosStatus)   rosStatus.textContent   = '🔴 Desconectado';
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
+  stopLidarMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -749,6 +933,7 @@ ros.on('error', function () {
   if (rosStatus)   rosStatus.textContent   = '⚠️ Error';
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
+  stopLidarMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -1449,6 +1634,7 @@ function actualizarEstadoControl() {
       pubStatus.textContent = `Enviando a "${topicSelect.value}" a ${currentHz} Hz.`;
     }
   }
+  refreshLidarControls();
 }
 
 // Botones de movimiento: actualizan el último comando y lo envían una vez

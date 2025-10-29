@@ -357,40 +357,17 @@ les -->
           <small>Puedes usar también teclas <b>W/A/S/D</b> para mover, <b>Espacio</b> para parar.</small>
           <div id="control-status" style="margin-top:0.5em;color:#c00;font-size:0.96em;"></div>
         </div>
-        <div id="gamepad-container" style="position:relative;width:320px;height:150px;background:#232;border-radius:16px;box-shadow:0 2px 8px #0004;overflow:hidden;">
-          <!-- Puedes usar tu imagen favorita aquí: -->
-          <img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Xbox360-controller.png"
-            style="position:absolute;width:320px;height:150px;opacity:0.35;left:0;top:0;">
-          <!-- Sticks -->
-          <div style="position:absolute;left:56px;top:78px;color:#0cf;font-size:1em;">
-            LS: (<span id="ls-x">0</span>, <span id="ls-y">0</span>)
+        <div class="lidar-card">
+          <div class="lidar-card-header">
+            <h4>LiDAR</h4>
+            <span id="lidar-status-chip" class="lidar-status-chip lidar-status-off">Apagado</span>
           </div>
-          <div style="position:absolute;left:185px;top:105px;color:#fc0;font-size:1em;">
-            RS: (<span id="rs-x">0</span>, <span id="rs-y">0</span>)
+          <p id="lidar-status-text" class="lidar-status-text">Sin conexión con ROS.</p>
+          <div class="lidar-actions">
+            <button id="btn-lidar-start" class="lidar-action-btn">Encender LiDAR</button>
+            <button id="btn-lidar-stop" class="lidar-action-btn lidar-action-stop">Detener LiDAR</button>
           </div>
-          <!-- Triggers -->
-          <div style="position:absolute;left:30px;top:10px;color:#0f0;font-size:0.97em;">
-            LT: <span id="lt">0</span>
-          </div>
-          <div style="position:absolute;left:240px;top:10px;color:#0f0;font-size:0.97em;">
-            RT: <span id="rt">0</span>
-          </div>
-          <!-- Botones principales (ejemplo) -->
-          <div style="position:absolute;left:255px;top:50px;">
-            <span id="btn-a" style="background:#0f0;border-radius:50%;padding:2px 7px 2px 7px;color:#000;"></span>
-          </div>
-          <div style="position:absolute;left:265px;top:35px;">
-            <span id="btn-b" style="background:#f00;border-radius:50%;padding:2px 7px 2px 7px;color:#fff;"></span>
-          </div>
-          <div style="position:absolute;left:240px;top:30px;">
-            <span id="btn-x" style="background:#00f;border-radius:50%;padding:2px 7px 2px 7px;color:#fff;"></span>
-          </div>
-          <div style="position:absolute;left:225px;top:40px;">
-            <span id="btn-y" style="background:#ff0;border-radius:50%;padding:2px 7px 2px 7px;color:#000;"></span>
-          </div>
-          <div style="position:absolute;left:150px;top:130px;color:#fff;font-size:0.92em;">
-            <span id="gamepad-status" style="color:#ff4;">Sin gamepad</span>
-          </div>
+          <small class="lidar-hint">Opera sobre los servicios `/start_motor` y `/stop_motor` del driver.</small>
         </div>
       </div>
       <div style="margin-top:1em; font-size:0.97em;">
@@ -432,7 +409,7 @@ les -->
             </article>
             <article class="slam-entry">
               <header>
-                <h4>/pose <small>(geometry_msgs/PoseWithCovarianceStamped)</small></h4>
+                <h4>/slam_toolbox/pose <small>(geometry_msgs/PoseStamped)</small></h4>
               </header>
               <p>Pose estimada del robot en el marco del mapa; se refleja con la flecha azul.</p>
               <pre id="slam-pose-output" class="slam-meta">Sin datos</pre>
@@ -457,7 +434,7 @@ les -->
       <div class="mapa-viewer">
         <div class="mapa-viewer-header">
           <h3>Mapa en vivo</h3>
-          <span class="mapa-viewer-subtitle">Plano XY manual · Pose: /pose</span>
+          <span class="mapa-viewer-subtitle">Plano XY manual · Pose: /slam_toolbox/pose</span>
         </div>
         <div class="xy-controls">
           <form id="xy-poi-form" class="xy-poi-form">
