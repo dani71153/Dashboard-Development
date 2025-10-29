@@ -34,6 +34,9 @@ const calibToggleAngleModeBtn = document.getElementById('calib-toggle-angle-mode
 const calibAngleModeHint = document.getElementById('calib-angle-mode-hint');
 const calibDesiredThetaLabel = document.getElementById('calib-desired-theta-label');
 const calibOffsetThetaLabel = document.getElementById('calib-offset-theta-label');
+const calibEncodersStatusChip = document.getElementById('calib-encoders-status');
+const calibFilteredStatusChip = document.getElementById('calib-filtered-status');
+const calibImuStatusChip = document.getElementById('calib-imu-status');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
@@ -65,6 +68,7 @@ let lidarActionInFlight = false;
 let calibEncodersMonitor = null;
 let calibFilteredMonitor = null;
 let calibImuMonitor = null;
+const CALIB_HEARTBEAT_TIMEOUT_MS = 6000;
 const calibracionData = {
   encoders: { x: null, y: null, theta: null, stamp: null },
   filtered: { x: null, y: null, theta: null, stamp: null },
@@ -117,6 +121,11 @@ const calibElements = {
 };
 const CALIB_EPSILON = 1e-6;
 let calibAngleMode = 'rad';
+const calibStatus = {
+  encoders: { el: calibEncodersStatusChip, timer: null },
+  filtered: { el: calibFilteredStatusChip, timer: null },
+  imu: { el: calibImuStatusChip, timer: null }
+};
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -837,6 +846,67 @@ if (lidarStopBtn) {
 refreshLidarControls();
 
 // --- Calibración (odometría e IMU) ---
+function clearCalibStatusTimer(key) {
+  const entry = calibStatus[key];
+  if (entry?.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+}
+
+function setCalibStatus(key, state, customLabel) {
+  const entry = calibStatus[key];
+  if (!entry?.el) return;
+  const el = entry.el;
+  el.classList.remove(
+    'calib-status-off',
+    'calib-status-waiting',
+    'calib-status-active',
+    'calib-status-stale',
+    'calib-status-paused'
+  );
+  let label = customLabel;
+  switch (state) {
+    case 'waiting':
+      el.classList.add('calib-status-waiting');
+      label = label || 'Esperando datos';
+      break;
+    case 'active':
+      el.classList.add('calib-status-active');
+      label = label || 'Recibiendo';
+      break;
+    case 'stale':
+      el.classList.add('calib-status-stale');
+      label = label || 'Sin datos recientes';
+      break;
+    case 'paused':
+      el.classList.add('calib-status-paused');
+      label = label || 'En pausa';
+      break;
+    case 'off':
+    default:
+      el.classList.add('calib-status-off');
+      label = label || 'Sin conexión';
+      break;
+  }
+  el.textContent = label;
+}
+
+function scheduleCalibStale(key) {
+  clearCalibStatusTimer(key);
+  const entry = calibStatus[key];
+  if (!entry) return;
+  entry.timer = setTimeout(() => {
+    setCalibStatus(key, 'stale');
+    entry.timer = null;
+  }, CALIB_HEARTBEAT_TIMEOUT_MS);
+}
+
+function markCalibHeartbeat(key) {
+  setCalibStatus(key, 'active');
+  scheduleCalibStale(key);
+}
+
 function resetCalibracionData() {
   calibracionData.encoders.x = null;
   calibracionData.encoders.y = null;
@@ -1065,6 +1135,8 @@ function startCalibracionMonitoring() {
   if (!window.ros || !window.ros.isConnected) return;
 
   if (!calibEncodersMonitor) {
+    clearCalibStatusTimer('encoders');
+    setCalibStatus('encoders', 'waiting');
     calibEncodersMonitor = new ROSLIB.Topic({
       ros: window.ros,
       name: '/diff_drive_controller/odom',
@@ -1076,6 +1148,8 @@ function startCalibracionMonitoring() {
   }
 
   if (!calibFilteredMonitor) {
+    clearCalibStatusTimer('filtered');
+    setCalibStatus('filtered', 'waiting');
     calibFilteredMonitor = new ROSLIB.Topic({
       ros: window.ros,
       name: '/odometry/filtered',
@@ -1087,6 +1161,8 @@ function startCalibracionMonitoring() {
   }
 
   if (!calibImuMonitor) {
+    clearCalibStatusTimer('imu');
+    setCalibStatus('imu', 'waiting');
     calibImuMonitor = new ROSLIB.Topic({
       ros: window.ros,
       name: '/imu/data',
@@ -1098,21 +1174,34 @@ function startCalibracionMonitoring() {
   }
 }
 
-function stopCalibracionMonitoring() {
+function stopCalibracionMonitoring(clearData = false) {
   if (calibEncodersMonitor) {
     calibEncodersMonitor.unsubscribe();
     calibEncodersMonitor = null;
   }
+  clearCalibStatusTimer('encoders');
   if (calibFilteredMonitor) {
     calibFilteredMonitor.unsubscribe();
     calibFilteredMonitor = null;
   }
+  clearCalibStatusTimer('filtered');
   if (calibImuMonitor) {
     calibImuMonitor.unsubscribe();
     calibImuMonitor = null;
   }
-  resetCalibracionData();
-  updateCalibracionDisplays();
+  clearCalibStatusTimer('imu');
+  if (clearData) {
+    resetCalibracionData();
+    updateCalibracionDisplays();
+    setCalibStatus('encoders', 'off');
+    setCalibStatus('filtered', 'off');
+    setCalibStatus('imu', 'off');
+  } else {
+    const rosConnected = !!(window.ros && window.ros.isConnected);
+    setCalibStatus('encoders', rosConnected ? 'paused' : 'off');
+    setCalibStatus('filtered', rosConnected ? 'paused' : 'off');
+    setCalibStatus('imu', rosConnected ? 'paused' : 'off');
+  }
 }
 
 function handleEncodersOdom(msg) {
@@ -1129,7 +1218,20 @@ function handleEncodersOdom(msg) {
   calibracionData.encoders.theta = Number.isFinite(yaw) ? yaw : null;
   calibracionData.encoders.stamp = stamp;
 
+  markCalibHeartbeat('encoders');
   updateCalibracionDisplays();
+}
+
+function updateCalibracionMonitoring() {
+  if (!window.ros || !window.ros.isConnected) {
+    stopCalibracionMonitoring(false);
+    return;
+  }
+  if (activeTab === 'calibracion') {
+    startCalibracionMonitoring();
+  } else {
+    stopCalibracionMonitoring(false);
+  }
 }
 
 function handleFilteredOdom(msg) {
@@ -1146,6 +1248,7 @@ function handleFilteredOdom(msg) {
   calibracionData.filtered.theta = Number.isFinite(yaw) ? yaw : null;
   calibracionData.filtered.stamp = stamp;
 
+  markCalibHeartbeat('filtered');
   updateCalibracionDisplays();
 }
 
@@ -1167,6 +1270,7 @@ function handleImuData(msg) {
   calibracionData.imu.linAcc.z = Number.isFinite(Number(linAcc?.z)) ? Number(linAcc.z) : null;
   calibracionData.imu.stamp = stamp;
 
+  markCalibHeartbeat('imu');
   updateCalibracionDisplays();
 }
 
@@ -1383,7 +1487,7 @@ ros.on('connection', function () {
   if (topicStatus) topicStatus.textContent = '—';
   startSlamMonitoring();
   startLidarMonitoring();
-  startCalibracionMonitoring();
+  updateCalibracionMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
   }
@@ -1394,7 +1498,7 @@ ros.on('close', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
-  stopCalibracionMonitoring();
+  stopCalibracionMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -1406,7 +1510,7 @@ ros.on('error', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
-  stopCalibracionMonitoring();
+  stopCalibracionMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -1507,6 +1611,8 @@ function showTab(tabId) {
   if (tabId === 'mapa') {
     ensureRos2dViewer();
   }
+
+  updateCalibracionMonitoring();
 }
 
 function getTabFromHash() {
