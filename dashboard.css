@@ -885,6 +885,220 @@ label {
   color: rgba(148, 163, 184, 0.85);
 }
 
+#calibracion {
+  background: var(--bg-secondary);
+}
+
+.calib-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.calib-settings {
+  flex: 1 1 280px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.calib-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.calib-form fieldset {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.calib-form legend {
+  font-weight: 600;
+  padding: 0 0.4em;
+  color: var(--text-muted);
+}
+
+.calib-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.calib-field span {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calib-field input {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 0.45rem 0.5rem;
+  color: var(--text-primary);
+}
+
+.calib-angle-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.calib-toggle-btn {
+  align-self: flex-start;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--primary-color);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--primary-color);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.calib-toggle-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.calib-angle-toggle span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.calib-note {
+  font-size: 0.8rem;
+  color: rgba(148, 163, 184, 0.85);
+  line-height: 1.4;
+}
+
+.calib-results {
+  flex: 2 1 480px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.calib-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.calib-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+}
+
+.calib-card-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.calib-topic {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 0.25rem;
+}
+
+.calib-timestamp {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.calib-axis-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.calib-axis-list li {
+  display: grid;
+  grid-template-columns: minmax(40px, auto) 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.35rem;
+  align-items: center;
+  background: var(--bg-subtle);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--border-radius-sm);
+  padding: 0.6rem 0.8rem;
+}
+
+.axis-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.axis-value {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.axis-diff,
+.axis-error {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.axis-error {
+  justify-self: end;
+}
+
+.calib-distance {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.calib-imu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.calib-imu-group h5 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.calib-imu-vec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 #monit-lista-topicos {
   display: flex;
   flex-direction: row;

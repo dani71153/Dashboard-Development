@@ -30,7 +30,7 @@ les -->
       <li><a href="#nodos_topicos" data-tab="nodos">Nodos</a></li>
       <li><a href="#monitoreo" data-tab="monitoreo">Monitoreo</a></li> <!-- NUEVO -->
       <li><a href="#control" data-tab="control">Control</a></li>
-      <li><a href="#urdf" data-tab="urdf">URDF</a></li>
+      <li><a href="#calibracion" data-tab="calibracion">Calibración</a></li>
       <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
     </ul>
   </nav>
@@ -377,13 +377,148 @@ les -->
     </section>
     
 
-    <section id="urdf">
-      <h2>URDF del Robot</h2>
-      <div id="visualizador-urdf"></div>
-      <div id="visualizador3d" style="width:100%; height:500px; background:#222; border-radius:10px;"></div>
+    <section id="calibracion" style="display:none;">
+      <h2>Calibración</h2>
+      <div class="calib-layout">
+        <aside class="calib-settings">
+          <h3>Objetivos y offsets</h3>
+          <form class="calib-form">
+            <fieldset>
+              <legend>Valores deseados</legend>
+              <label class="calib-field">
+                <span>X (m)</span>
+                <input type="number" id="calib-desired-x" step="0.01" value="0">
+              </label>
+              <label class="calib-field">
+                <span>Y (m)</span>
+                <input type="number" id="calib-desired-y" step="0.01" value="0">
+              </label>
+              <label class="calib-field">
+                <span id="calib-desired-theta-label">Yaw (rad)</span>
+                <input type="number" id="calib-desired-theta" step="0.01" value="0">
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Offsets aplicados (medido + offset)</legend>
+              <label class="calib-field">
+                <span>Offset X (m)</span>
+                <input type="number" id="calib-offset-x" step="0.01" value="0">
+              </label>
+              <label class="calib-field">
+                <span>Offset Y (m)</span>
+                <input type="number" id="calib-offset-y" step="0.01" value="0">
+              </label>
+              <label class="calib-field">
+                <span id="calib-offset-theta-label">Offset yaw (rad)</span>
+                <input type="number" id="calib-offset-theta" step="0.01" value="0">
+              </label>
+            </fieldset>
+          </form>
+          <div class="calib-angle-toggle">
+            <button type="button" id="calib-toggle-angle-mode" class="calib-toggle-btn">Ver en grados</button>
+            <span id="calib-angle-mode-hint">Mostrando ángulos en radianes.</span>
+          </div>
+          <small class="calib-note">Los offsets se suman a las mediciones antes de compararlas con los valores deseados.</small>
+        </aside>
+        <div class="calib-results">
+          <article class="calib-card">
+            <header class="calib-card-header">
+              <div>
+                <h4>Odometría · Encoders</h4>
+                <span class="calib-topic">/diff_drive_controller/odom</span>
+              </div>
+              <time id="calib-encoders-stamp" class="calib-timestamp">—</time>
+            </header>
+            <ul class="calib-axis-list">
+              <li>
+                <span class="axis-label">X</span>
+                <span class="axis-value" id="calib-encoders-x">—</span>
+                <span class="axis-diff" id="calib-encoders-x-diff">Diff: —</span>
+                <span class="axis-error" id="calib-encoders-x-error">Error: —</span>
+              </li>
+              <li>
+                <span class="axis-label">Y</span>
+                <span class="axis-value" id="calib-encoders-y">—</span>
+                <span class="axis-diff" id="calib-encoders-y-diff">Diff: —</span>
+                <span class="axis-error" id="calib-encoders-y-error">Error: —</span>
+              </li>
+              <li>
+                <span class="axis-label">Yaw</span>
+                <span class="axis-value" id="calib-encoders-theta">—</span>
+                <span class="axis-diff" id="calib-encoders-theta-diff">Diff: —</span>
+                <span class="axis-error" id="calib-encoders-theta-error">Error: —</span>
+              </li>
+            </ul>
+            <div class="calib-distance">Distancia vs deseado: <span id="calib-encoders-distance">—</span></div>
+          </article>
 
+          <article class="calib-card">
+            <header class="calib-card-header">
+              <div>
+                <h4>Odometría · Filtro IMU</h4>
+                <span class="calib-topic">/odometry/filtered</span>
+              </div>
+              <time id="calib-filtered-stamp" class="calib-timestamp">—</time>
+            </header>
+            <ul class="calib-axis-list">
+              <li>
+                <span class="axis-label">X</span>
+                <span class="axis-value" id="calib-filtered-x">—</span>
+                <span class="axis-diff" id="calib-filtered-x-diff">Diff: —</span>
+                <span class="axis-error" id="calib-filtered-x-error">Error: —</span>
+              </li>
+              <li>
+                <span class="axis-label">Y</span>
+                <span class="axis-value" id="calib-filtered-y">—</span>
+                <span class="axis-diff" id="calib-filtered-y-diff">Diff: —</span>
+                <span class="axis-error" id="calib-filtered-y-error">Error: —</span>
+              </li>
+              <li>
+                <span class="axis-label">Yaw</span>
+                <span class="axis-value" id="calib-filtered-theta">—</span>
+                <span class="axis-diff" id="calib-filtered-theta-diff">Diff: —</span>
+                <span class="axis-error" id="calib-filtered-theta-error">Error: —</span>
+              </li>
+            </ul>
+            <div class="calib-distance">Distancia vs deseado: <span id="calib-filtered-distance">—</span></div>
+          </article>
+
+          <article class="calib-card">
+            <header class="calib-card-header">
+              <div>
+                <h4>IMU</h4>
+                <span class="calib-topic">/imu/data</span>
+              </div>
+              <time id="calib-imu-stamp" class="calib-timestamp">—</time>
+            </header>
+            <ul class="calib-axis-list">
+              <li>
+                <span class="axis-label">Yaw</span>
+                <span class="axis-value" id="calib-imu-theta">—</span>
+                <span class="axis-diff" id="calib-imu-theta-diff">Diff: —</span>
+                <span class="axis-error" id="calib-imu-theta-error">Error: —</span>
+              </li>
+            </ul>
+            <div class="calib-imu-group">
+              <h5>Velocidad angular (rad/s)</h5>
+              <div class="calib-imu-vec">
+                <span>X: <span id="calib-imu-ang-x">—</span></span>
+                <span>Y: <span id="calib-imu-ang-y">—</span></span>
+                <span>Z: <span id="calib-imu-ang-z">—</span></span>
+              </div>
+            </div>
+            <div class="calib-imu-group">
+              <h5>Aceleración lineal (m/s²)</h5>
+              <div class="calib-imu-vec">
+                <span>X: <span id="calib-imu-lin-x">—</span></span>
+                <span>Y: <span id="calib-imu-lin-y">—</span></span>
+                <span>Z: <span id="calib-imu-lin-z">—</span></span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
     </section>
-
 
   <section id="mapa">
     <h2>Visualización del Mapa</h2>

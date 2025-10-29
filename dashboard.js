@@ -24,6 +24,16 @@ const lidarStatusChip = document.getElementById('lidar-status-chip');
 const lidarStatusText = document.getElementById('lidar-status-text');
 const lidarStartBtn = document.getElementById('btn-lidar-start');
 const lidarStopBtn = document.getElementById('btn-lidar-stop');
+const calibDesiredXInput = document.getElementById('calib-desired-x');
+const calibDesiredYInput = document.getElementById('calib-desired-y');
+const calibDesiredThetaInput = document.getElementById('calib-desired-theta');
+const calibOffsetXInput = document.getElementById('calib-offset-x');
+const calibOffsetYInput = document.getElementById('calib-offset-y');
+const calibOffsetThetaInput = document.getElementById('calib-offset-theta');
+const calibToggleAngleModeBtn = document.getElementById('calib-toggle-angle-mode');
+const calibAngleModeHint = document.getElementById('calib-angle-mode-hint');
+const calibDesiredThetaLabel = document.getElementById('calib-desired-theta-label');
+const calibOffsetThetaLabel = document.getElementById('calib-offset-theta-label');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
@@ -52,6 +62,61 @@ let lidarStartService = null;
 let lidarStopService = null;
 let lidarState = 'off';
 let lidarActionInFlight = false;
+let calibEncodersMonitor = null;
+let calibFilteredMonitor = null;
+let calibImuMonitor = null;
+const calibracionData = {
+  encoders: { x: null, y: null, theta: null, stamp: null },
+  filtered: { x: null, y: null, theta: null, stamp: null },
+  imu: {
+    theta: null,
+    angVel: { x: null, y: null, z: null },
+    linAcc: { x: null, y: null, z: null },
+    stamp: null
+  }
+};
+const calibElements = {
+  encoders: {
+    stamp: document.getElementById('calib-encoders-stamp'),
+    xValue: document.getElementById('calib-encoders-x'),
+    xDiff: document.getElementById('calib-encoders-x-diff'),
+    xError: document.getElementById('calib-encoders-x-error'),
+    yValue: document.getElementById('calib-encoders-y'),
+    yDiff: document.getElementById('calib-encoders-y-diff'),
+    yError: document.getElementById('calib-encoders-y-error'),
+    thetaValue: document.getElementById('calib-encoders-theta'),
+    thetaDiff: document.getElementById('calib-encoders-theta-diff'),
+    thetaError: document.getElementById('calib-encoders-theta-error'),
+    distance: document.getElementById('calib-encoders-distance')
+  },
+  filtered: {
+    stamp: document.getElementById('calib-filtered-stamp'),
+    xValue: document.getElementById('calib-filtered-x'),
+    xDiff: document.getElementById('calib-filtered-x-diff'),
+    xError: document.getElementById('calib-filtered-x-error'),
+    yValue: document.getElementById('calib-filtered-y'),
+    yDiff: document.getElementById('calib-filtered-y-diff'),
+    yError: document.getElementById('calib-filtered-y-error'),
+    thetaValue: document.getElementById('calib-filtered-theta'),
+    thetaDiff: document.getElementById('calib-filtered-theta-diff'),
+    thetaError: document.getElementById('calib-filtered-theta-error'),
+    distance: document.getElementById('calib-filtered-distance')
+  },
+  imu: {
+    stamp: document.getElementById('calib-imu-stamp'),
+    thetaValue: document.getElementById('calib-imu-theta'),
+    thetaDiff: document.getElementById('calib-imu-theta-diff'),
+    thetaError: document.getElementById('calib-imu-theta-error'),
+    angX: document.getElementById('calib-imu-ang-x'),
+    angY: document.getElementById('calib-imu-ang-y'),
+    angZ: document.getElementById('calib-imu-ang-z'),
+    linX: document.getElementById('calib-imu-lin-x'),
+    linY: document.getElementById('calib-imu-lin-y'),
+    linZ: document.getElementById('calib-imu-lin-z')
+  }
+};
+const CALIB_EPSILON = 1e-6;
+let calibAngleMode = 'rad';
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -771,6 +836,411 @@ if (lidarStopBtn) {
 
 refreshLidarControls();
 
+// --- Calibración (odometría e IMU) ---
+function resetCalibracionData() {
+  calibracionData.encoders.x = null;
+  calibracionData.encoders.y = null;
+  calibracionData.encoders.theta = null;
+  calibracionData.encoders.stamp = null;
+
+  calibracionData.filtered.x = null;
+  calibracionData.filtered.y = null;
+  calibracionData.filtered.theta = null;
+  calibracionData.filtered.stamp = null;
+
+  calibracionData.imu.theta = null;
+  calibracionData.imu.angVel.x = null;
+  calibracionData.imu.angVel.y = null;
+  calibracionData.imu.angVel.z = null;
+  calibracionData.imu.linAcc.x = null;
+  calibracionData.imu.linAcc.y = null;
+  calibracionData.imu.linAcc.z = null;
+  calibracionData.imu.stamp = null;
+}
+
+function setElementText(element, text) {
+  if (!element) return;
+  element.textContent = text;
+}
+
+function formatTimestamp(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function formatLinear(value) {
+  if (!Number.isFinite(value)) return '—';
+  return `${value.toFixed(3)} m`;
+}
+
+function formatLinearDiff(value) {
+  if (!Number.isFinite(value)) return '—';
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(3)} m`;
+}
+
+function formatScalar(value, decimals = 3) {
+  if (!Number.isFinite(value)) return '—';
+  return value.toFixed(decimals);
+}
+
+function formatAngle(valueRad) {
+  if (!Number.isFinite(valueRad)) return '—';
+  if (calibAngleMode === 'deg') {
+    return `${radToDeg(valueRad).toFixed(2)}°`;
+  }
+  return `${valueRad.toFixed(3)} rad`;
+}
+
+function formatAngleDiff(valueRad) {
+  if (!Number.isFinite(valueRad)) return '—';
+  if (calibAngleMode === 'deg') {
+    const deg = radToDeg(valueRad);
+    const sign = deg >= 0 ? '+' : '';
+    return `${sign}${deg.toFixed(2)}°`;
+  }
+  const sign = valueRad >= 0 ? '+' : '';
+  return `${sign}${valueRad.toFixed(3)} rad`;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return '—';
+  return `${value.toFixed(1)}%`;
+}
+
+function computePercentError(desired, actual) {
+  if (!Number.isFinite(desired) || Math.abs(desired) < CALIB_EPSILON) return null;
+  if (!Number.isFinite(actual)) return null;
+  return Math.abs((actual - desired) / desired) * 100;
+}
+
+function normalizeAngle(angle) {
+  if (!Number.isFinite(angle)) return angle;
+  let a = angle;
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return a;
+}
+
+function getThetaInputValue(input) {
+  const raw = Number.parseFloat(input?.value ?? '');
+  if (!Number.isFinite(raw)) return 0;
+  return calibAngleMode === 'deg' ? degToRad(raw) : raw;
+}
+
+function getDesiredValues() {
+  const x = Number.parseFloat(calibDesiredXInput?.value ?? '');
+  const y = Number.parseFloat(calibDesiredYInput?.value ?? '');
+  return {
+    x: Number.isFinite(x) ? x : 0,
+    y: Number.isFinite(y) ? y : 0,
+    theta: getThetaInputValue(calibDesiredThetaInput)
+  };
+}
+
+function getOffsetValues() {
+  const x = Number.parseFloat(calibOffsetXInput?.value ?? '');
+  const y = Number.parseFloat(calibOffsetYInput?.value ?? '');
+  return {
+    x: Number.isFinite(x) ? x : 0,
+    y: Number.isFinite(y) ? y : 0,
+    theta: getThetaInputValue(calibOffsetThetaInput)
+  };
+}
+
+function updateCalibracionDisplays() {
+  const desired = getDesiredValues();
+  const offsets = getOffsetValues();
+
+  updateCalibCard('encoders', desired, offsets);
+  updateCalibCard('filtered', desired, offsets);
+  updateImuCard(desired, offsets);
+}
+
+function updateCalibCard(key, desired, offsets) {
+  const data = calibracionData[key];
+  const elements = calibElements[key];
+  if (!data || !elements) return;
+
+  const hasX = Number.isFinite(data.x);
+  const hasY = Number.isFinite(data.y);
+  const hasTheta = Number.isFinite(data.theta);
+
+  const adjustedX = hasX ? data.x + offsets.x : null;
+  const adjustedY = hasY ? data.y + offsets.y : null;
+  const adjustedTheta = hasTheta ? normalizeAngle(data.theta + offsets.theta) : null;
+
+  const diffX = Number.isFinite(adjustedX) ? adjustedX - desired.x : null;
+  const diffY = Number.isFinite(adjustedY) ? adjustedY - desired.y : null;
+  const diffTheta = Number.isFinite(adjustedTheta) ? normalizeAngle(adjustedTheta - desired.theta) : null;
+
+  const percentX = Number.isFinite(adjustedX) ? computePercentError(desired.x, adjustedX) : null;
+  const percentY = Number.isFinite(adjustedY) ? computePercentError(desired.y, adjustedY) : null;
+  const percentTheta = Number.isFinite(adjustedTheta) ? computePercentError(desired.theta, adjustedTheta) : null;
+
+  const distanceDiff = Number.isFinite(adjustedX) && Number.isFinite(adjustedY)
+    ? Math.hypot(adjustedX - desired.x, adjustedY - desired.y)
+    : null;
+
+  setElementText(elements.stamp, formatTimestamp(data.stamp));
+  setElementText(elements.xValue, hasX ? formatLinear(data.x) : '—');
+  setElementText(elements.yValue, hasY ? formatLinear(data.y) : '—');
+  setElementText(elements.thetaValue, hasTheta ? formatAngle(data.theta) : '—');
+
+  setElementText(
+    elements.xDiff,
+    Number.isFinite(diffX)
+      ? `Diff: ${formatLinearDiff(diffX)} (ajustado: ${formatLinear(adjustedX)})`
+      : 'Diff: —'
+  );
+  setElementText(
+    elements.yDiff,
+    Number.isFinite(diffY)
+      ? `Diff: ${formatLinearDiff(diffY)} (ajustado: ${formatLinear(adjustedY)})`
+      : 'Diff: —'
+  );
+  setElementText(
+    elements.thetaDiff,
+    Number.isFinite(diffTheta)
+      ? `Diff: ${formatAngleDiff(diffTheta)} (ajustado: ${formatAngle(adjustedTheta)})`
+      : 'Diff: —'
+  );
+
+  setElementText(
+    elements.xError,
+    Number.isFinite(percentX) ? `Error: ${formatPercent(percentX)}` : 'Error: —'
+  );
+  setElementText(
+    elements.yError,
+    Number.isFinite(percentY) ? `Error: ${formatPercent(percentY)}` : 'Error: —'
+  );
+  setElementText(
+    elements.thetaError,
+    Number.isFinite(percentTheta) ? `Error: ${formatPercent(percentTheta)}` : 'Error: —'
+  );
+
+  setElementText(
+    elements.distance,
+    Number.isFinite(distanceDiff) ? formatLinear(distanceDiff) : '—'
+  );
+}
+
+function updateImuCard(desired, offsets) {
+  const data = calibracionData.imu;
+  const elements = calibElements.imu;
+  if (!data || !elements) return;
+
+  const hasTheta = Number.isFinite(data.theta);
+  const adjustedTheta = hasTheta ? normalizeAngle(data.theta + offsets.theta) : null;
+  const diffTheta = Number.isFinite(adjustedTheta) ? normalizeAngle(adjustedTheta - desired.theta) : null;
+  const percentTheta = Number.isFinite(adjustedTheta) ? computePercentError(desired.theta, adjustedTheta) : null;
+
+  setElementText(elements.stamp, formatTimestamp(data.stamp));
+  setElementText(elements.thetaValue, hasTheta ? formatAngle(data.theta) : '—');
+  setElementText(
+    elements.thetaDiff,
+    Number.isFinite(diffTheta)
+      ? `Diff: ${formatAngleDiff(diffTheta)} (ajustado: ${formatAngle(adjustedTheta)})`
+      : 'Diff: —'
+  );
+  setElementText(
+    elements.thetaError,
+    Number.isFinite(percentTheta) ? `Error: ${formatPercent(percentTheta)}` : 'Error: —'
+  );
+
+  setElementText(elements.angX, formatScalar(calibracionData.imu.angVel.x));
+  setElementText(elements.angY, formatScalar(calibracionData.imu.angVel.y));
+  setElementText(elements.angZ, formatScalar(calibracionData.imu.angVel.z));
+
+  setElementText(elements.linX, formatScalar(calibracionData.imu.linAcc.x));
+  setElementText(elements.linY, formatScalar(calibracionData.imu.linAcc.y));
+  setElementText(elements.linZ, formatScalar(calibracionData.imu.linAcc.z));
+}
+
+function startCalibracionMonitoring() {
+  if (!window.ros || !window.ros.isConnected) return;
+
+  if (!calibEncodersMonitor) {
+    calibEncodersMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/diff_drive_controller/odom',
+      messageType: 'nav_msgs/Odometry',
+      queue_length: 1,
+      throttle_rate: 0
+    });
+    calibEncodersMonitor.subscribe(handleEncodersOdom);
+  }
+
+  if (!calibFilteredMonitor) {
+    calibFilteredMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/odometry/filtered',
+      messageType: 'nav_msgs/Odometry',
+      queue_length: 1,
+      throttle_rate: 0
+    });
+    calibFilteredMonitor.subscribe(handleFilteredOdom);
+  }
+
+  if (!calibImuMonitor) {
+    calibImuMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/imu/data',
+      messageType: 'sensor_msgs/Imu',
+      queue_length: 1,
+      throttle_rate: 0
+    });
+    calibImuMonitor.subscribe(handleImuData);
+  }
+}
+
+function stopCalibracionMonitoring() {
+  if (calibEncodersMonitor) {
+    calibEncodersMonitor.unsubscribe();
+    calibEncodersMonitor = null;
+  }
+  if (calibFilteredMonitor) {
+    calibFilteredMonitor.unsubscribe();
+    calibFilteredMonitor = null;
+  }
+  if (calibImuMonitor) {
+    calibImuMonitor.unsubscribe();
+    calibImuMonitor = null;
+  }
+  resetCalibracionData();
+  updateCalibracionDisplays();
+}
+
+function handleEncodersOdom(msg) {
+  const position = msg?.pose?.pose?.position;
+  const orientation = msg?.pose?.pose?.orientation || {};
+  const stamp = rosTimeToDate(msg?.header?.stamp) ?? new Date();
+
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  const yaw = quaternionToYaw(orientation);
+
+  calibracionData.encoders.x = Number.isFinite(x) ? x : null;
+  calibracionData.encoders.y = Number.isFinite(y) ? y : null;
+  calibracionData.encoders.theta = Number.isFinite(yaw) ? yaw : null;
+  calibracionData.encoders.stamp = stamp;
+
+  updateCalibracionDisplays();
+}
+
+function handleFilteredOdom(msg) {
+  const position = msg?.pose?.pose?.position;
+  const orientation = msg?.pose?.pose?.orientation || {};
+  const stamp = rosTimeToDate(msg?.header?.stamp) ?? new Date();
+
+  const x = Number(position?.x);
+  const y = Number(position?.y);
+  const yaw = quaternionToYaw(orientation);
+
+  calibracionData.filtered.x = Number.isFinite(x) ? x : null;
+  calibracionData.filtered.y = Number.isFinite(y) ? y : null;
+  calibracionData.filtered.theta = Number.isFinite(yaw) ? yaw : null;
+  calibracionData.filtered.stamp = stamp;
+
+  updateCalibracionDisplays();
+}
+
+function handleImuData(msg) {
+  const orientation = msg?.orientation || {};
+  const angVel = msg?.angular_velocity || {};
+  const linAcc = msg?.linear_acceleration || {};
+  const stamp = rosTimeToDate(msg?.header?.stamp) ?? new Date();
+
+  const yaw = quaternionToYaw(orientation);
+
+  calibracionData.imu.theta = Number.isFinite(yaw) ? yaw : null;
+  calibracionData.imu.angVel.x = Number.isFinite(Number(angVel?.x)) ? Number(angVel.x) : null;
+  calibracionData.imu.angVel.y = Number.isFinite(Number(angVel?.y)) ? Number(angVel.y) : null;
+  calibracionData.imu.angVel.z = Number.isFinite(Number(angVel?.z)) ? Number(angVel.z) : null;
+
+  calibracionData.imu.linAcc.x = Number.isFinite(Number(linAcc?.x)) ? Number(linAcc.x) : null;
+  calibracionData.imu.linAcc.y = Number.isFinite(Number(linAcc?.y)) ? Number(linAcc.y) : null;
+  calibracionData.imu.linAcc.z = Number.isFinite(Number(linAcc?.z)) ? Number(linAcc.z) : null;
+  calibracionData.imu.stamp = stamp;
+
+  updateCalibracionDisplays();
+}
+
+function convertAngleInputValue(input, fromMode, toMode) {
+  if (!input) return;
+  const current = Number.parseFloat(input.value);
+  if (!Number.isFinite(current)) return;
+
+  let converted = current;
+  if (fromMode === 'rad' && toMode === 'deg') {
+    converted = radToDeg(current);
+  } else if (fromMode === 'deg' && toMode === 'rad') {
+    converted = degToRad(current);
+  }
+
+  const decimals = toMode === 'deg' ? 2 : 3;
+  input.value = Number.isFinite(converted) ? converted.toFixed(decimals) : '';
+}
+
+function updateAngleModeUI() {
+  if (calibDesiredThetaLabel) {
+    calibDesiredThetaLabel.textContent = calibAngleMode === 'rad' ? 'Yaw (rad)' : 'Yaw (°)';
+  }
+  if (calibOffsetThetaLabel) {
+    calibOffsetThetaLabel.textContent = calibAngleMode === 'rad' ? 'Offset yaw (rad)' : 'Offset yaw (°)';
+  }
+  if (calibAngleModeHint) {
+    calibAngleModeHint.textContent = calibAngleMode === 'rad'
+      ? 'Mostrando ángulos en radianes.'
+      : 'Mostrando ángulos en grados.';
+  }
+  if (calibToggleAngleModeBtn) {
+    calibToggleAngleModeBtn.textContent = calibAngleMode === 'rad'
+      ? 'Ver en grados'
+      : 'Ver en radianes';
+  }
+  if (calibDesiredThetaInput) {
+    calibDesiredThetaInput.step = calibAngleMode === 'rad' ? '0.01' : '1';
+  }
+  if (calibOffsetThetaInput) {
+    calibOffsetThetaInput.step = calibAngleMode === 'rad' ? '0.01' : '1';
+  }
+}
+
+function toggleCalibAngleMode() {
+  const newMode = calibAngleMode === 'rad' ? 'deg' : 'rad';
+  convertAngleInputValue(calibDesiredThetaInput, calibAngleMode, newMode);
+  convertAngleInputValue(calibOffsetThetaInput, calibAngleMode, newMode);
+  calibAngleMode = newMode;
+  updateAngleModeUI();
+  updateCalibracionDisplays();
+}
+
+const calibInputs = [
+  calibDesiredXInput,
+  calibDesiredYInput,
+  calibDesiredThetaInput,
+  calibOffsetXInput,
+  calibOffsetYInput,
+  calibOffsetThetaInput
+].filter(Boolean);
+
+calibInputs.forEach(input => {
+  input.addEventListener('input', () => updateCalibracionDisplays());
+});
+
+if (calibToggleAngleModeBtn) {
+  calibToggleAngleModeBtn.addEventListener('click', toggleCalibAngleMode);
+}
+
+resetCalibracionData();
+updateAngleModeUI();
+updateCalibracionDisplays();
+
 function showSlamServiceFeedback(text, isError = false) {
   if (!slamServiceFeedback) return;
   slamServiceFeedback.textContent = text;
@@ -913,6 +1383,7 @@ ros.on('connection', function () {
   if (topicStatus) topicStatus.textContent = '—';
   startSlamMonitoring();
   startLidarMonitoring();
+  startCalibracionMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
   }
@@ -923,6 +1394,7 @@ ros.on('close', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
+  stopCalibracionMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -934,6 +1406,7 @@ ros.on('error', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
+  stopCalibracionMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
