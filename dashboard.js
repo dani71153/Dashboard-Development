@@ -20,6 +20,7 @@ const xyNameInput = document.getElementById('xy-poi-name');
 const xyXInput = document.getElementById('xy-poi-x');
 const xyYInput = document.getElementById('xy-poi-y');
 const xyYawInput = document.getElementById('xy-poi-yaw');
+const navImuTemp = document.getElementById('nav-imu-temp');
 const lidarStatusChip = document.getElementById('lidar-status-chip');
 const lidarStatusText = document.getElementById('lidar-status-text');
 const lidarStartBtn = document.getElementById('btn-lidar-start');
@@ -59,12 +60,17 @@ let xyCanvasWidth = 0;
 let xyCanvasHeight = 0;
 const LIDAR_TOPIC_NAME = '/scan';
 const LIDAR_HEARTBEAT_TIMEOUT_MS = 6000;
+const IMU_TEMP_TOPIC_NAME = '/imu/temp';
+const IMU_TEMP_TIMEOUT_MS = 7000;
 let lidarScanMonitor = null;
 let lidarHeartbeatTimer = null;
 let lidarStartService = null;
 let lidarStopService = null;
 let lidarState = 'off';
 let lidarActionInFlight = false;
+let imuTempMonitor = null;
+let imuTempTimer = null;
+let navImuLastTemp = null;
 let calibEncodersMonitor = null;
 let calibFilteredMonitor = null;
 let calibImuMonitor = null;
@@ -845,6 +851,118 @@ if (lidarStopBtn) {
 
 refreshLidarControls();
 
+// --- Temperatura IMU en navegación ---
+function setNavImuTempDisplay(state, tempValue = navImuLastTemp) {
+  if (!navImuTemp) return;
+  navImuTemp.classList.remove(
+    'nav-imu-temp-off',
+    'nav-imu-temp-waiting',
+    'nav-imu-temp-active',
+    'nav-imu-temp-stale'
+  );
+
+  let label = 'Temp: — °C';
+
+  switch (state) {
+    case 'waiting':
+      navImuTemp.classList.add('nav-imu-temp-waiting');
+      label = 'Temp: esperando…';
+      break;
+    case 'active':
+      navImuTemp.classList.add('nav-imu-temp-active');
+      if (Number.isFinite(tempValue)) {
+        label = `Temp: ${tempValue.toFixed(1)} °C`;
+      }
+      break;
+    case 'stale':
+      navImuTemp.classList.add('nav-imu-temp-stale');
+      if (Number.isFinite(tempValue)) {
+        label = `Temp: ${tempValue.toFixed(1)} °C · sin datos recientes`;
+      } else {
+        label = 'Temp: sin datos recientes';
+      }
+      break;
+    case 'off':
+    default:
+      navImuTemp.classList.add('nav-imu-temp-off');
+      label = 'Temp: — °C';
+      break;
+  }
+
+  navImuTemp.textContent = label;
+}
+
+function clearImuTempTimer() {
+  if (imuTempTimer) {
+    clearTimeout(imuTempTimer);
+    imuTempTimer = null;
+  }
+}
+
+function scheduleImuTempStale() {
+  clearImuTempTimer();
+  imuTempTimer = setTimeout(() => {
+    setNavImuTempDisplay('stale');
+  }, IMU_TEMP_TIMEOUT_MS);
+}
+
+function handleImuTempMessage(msg) {
+  if (!navImuTemp) return;
+  let temp = null;
+
+  if (typeof msg === 'number') {
+    temp = msg;
+  } else if (msg) {
+    if (typeof msg.data === 'number') {
+      temp = msg.data;
+    } else if (typeof msg.temperature === 'number') {
+      temp = msg.temperature;
+    } else if (typeof msg.temp === 'number') {
+      temp = msg.temp;
+    }
+  }
+
+  if (!Number.isFinite(temp)) return;
+
+  navImuLastTemp = temp;
+  setNavImuTempDisplay('active', temp);
+  scheduleImuTempStale();
+}
+
+function startImuTempMonitoring() {
+  if (!navImuTemp) return;
+  if (!window.ros || !window.ros.isConnected) return;
+  if (imuTempMonitor) return;
+
+  setNavImuTempDisplay('waiting');
+
+  imuTempMonitor = new ROSLIB.Topic({
+    ros: window.ros,
+    name: IMU_TEMP_TOPIC_NAME,
+    messageType: 'sensor_msgs/Temperature',
+    queue_length: 1,
+    throttle_rate: 0
+  });
+
+  imuTempMonitor.subscribe(handleImuTempMessage);
+}
+
+function stopImuTempMonitoring(clearDisplay = true) {
+  if (imuTempMonitor) {
+    imuTempMonitor.unsubscribe();
+    imuTempMonitor = null;
+  }
+  clearImuTempTimer();
+  if (clearDisplay) {
+    navImuLastTemp = null;
+    setNavImuTempDisplay('off');
+  } else if (navImuTemp) {
+    setNavImuTempDisplay('waiting');
+  }
+}
+
+setNavImuTempDisplay('off');
+
 // --- Calibración (odometría e IMU) ---
 function clearCalibStatusTimer(key) {
   const entry = calibStatus[key];
@@ -1487,6 +1605,7 @@ ros.on('connection', function () {
   if (topicStatus) topicStatus.textContent = '—';
   startSlamMonitoring();
   startLidarMonitoring();
+  startImuTempMonitoring();
   updateCalibracionMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
@@ -1498,6 +1617,7 @@ ros.on('close', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
+  stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
@@ -1510,6 +1630,7 @@ ros.on('error', function () {
   if (topicStatus) topicStatus.textContent = '—';
   stopSlamMonitoring();
   stopLidarMonitoring();
+  stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);

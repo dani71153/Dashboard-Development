@@ -65,6 +65,18 @@ nav {
   position: sticky;
   top: 0;
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.nav-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  order: 1;
 }
 
 nav ul {
@@ -73,6 +85,8 @@ nav ul {
   gap: var(--spacing-sm);
   justify-content: center;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  order: 2;
 }
 
 nav a {
@@ -98,6 +112,43 @@ nav a.active {
   background: var(--primary-color);
   color: var(--text-light);
   border-color: var(--primary-dark);
+}
+
+.nav-imu-temp {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--border-radius);
+  background: rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: rgba(51, 65, 85, 0.95);
+  min-width: 140px;
+  text-align: center;
+  transition: var(--transition);
+}
+
+.nav-imu-temp.nav-imu-temp-off {
+  background: rgba(148, 163, 184, 0.12);
+  color: rgba(148, 163, 184, 0.9);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.nav-imu-temp.nav-imu-temp-waiting {
+  background: rgba(99, 102, 241, 0.12);
+  color: rgba(79, 70, 229, 0.9);
+  border-color: rgba(79, 70, 229, 0.35);
+}
+
+.nav-imu-temp.nav-imu-temp-active {
+  background: rgba(34, 197, 94, 0.16);
+  color: rgba(22, 163, 74, 0.95);
+  border-color: rgba(22, 163, 74, 0.4);
+}
+
+.nav-imu-temp.nav-imu-temp-stale {
+  background: rgba(251, 191, 36, 0.14);
+  color: rgba(202, 138, 4, 0.95);
+  border-color: rgba(202, 138, 4, 0.45);
 }
 
 /* ============ ESTADO ROS ============ */

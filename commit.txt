@@ -1,9 +1,6 @@
-Implementé una vista XY manual para el mapa y herramientas para anotar poses:
+Añadí un chip de estado por tópico en cada tarjeta de Calibración (prueba.html:433, prueba.html:456, prueba.html:487) y los estilos asociados (dashboard.css:916, dashboard.css:940). La lógica JS ahora gestiona timers/heartbeat por tópico: al abrir la pestaña, los chips pasan a “Esperando datos”; tras el primer mensaje cambian a “Recibiendo”, caducan a “Sin datos recientes” si no llega nada y se ponen en “En pausa” al salir de la pestaña o “Sin conexión” ante desconexión (dashboard.js:27, dashboard.js:71, dashboard.js:650). Prueba ejecutada: node --check dashboard.js.
 
-Sustituí la integración ROS2D por un canvas propio que dibuja retícula, ejes y la flecha del robot, con redimensionamiento y actualización vía /pose (dashboard.js:229, dashboard.js:367, dashboard.js:546).
+Agregué un termómetro en la barra superior que lee /imu/temp y marca su estado de recepción: el markup y layout flexible viven en prueba.html:27 y dashboard.css:61, con el chip estilizado en dashboard.css:117. La lógica se integra en dashboard.js:23 y dashboard.js:854, donde se inicializa el monitor, se aceptan mensajes sensor_msgs/Temperature (o valores en data/temp) y se muestran estados esperando, recibiendo o sin datos recientes; la suscripción se arranca/alivia junto con el ciclo de conexión de ROS (dashboard.js:1589, dashboard.js:1599). Prueba ejecutada: node --check dashboard.js.
 
-Añadí formulario y listado de puntos de interés con colores, soporte para orientación opcional y botón “Usar pose actual” que captura la pose activa (prueba.html:458, dashboard.css:252, dashboard.js:472, dashboard.js:900).
+Siguiente paso sugerido: 1) Con ROSBridge activo, confirma que /imu/temp entrega datos y que el chip pasa por los distintos estados; si tu driver publica std_msgs/Float32, no necesitas cambios porque el código ya lee data, pero puedes ajustar IMU_TEMP_TOPIC_NAME o el messageType si usas otro esquema.
 
-Ajusté el placeholder para que no bloquee la interacción y se oculte automáticamente al recibir datos o al añadir puntos (dashboard.js:151, dashboard.css:409).
-
-Tests: node --check dashboard.js
