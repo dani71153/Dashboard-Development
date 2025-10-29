@@ -417,8 +417,8 @@ les -->
         <span id="slam-last-update" style="display:block;color:#777;font-size:0.85em;">Última actualización: —</span>
       </span>
     </div>
-    <div class="slam-grid">
-      <div class="slam-column">
+    <div class="mapa-layout">
+      <div class="mapa-sidebar">
         <div class="slam-card">
           <h3>Tópicos publicados</h3>
           <div class="slam-card-body">
@@ -426,7 +426,7 @@ les -->
               <header>
                 <h4>/map <small>(nav_msgs/OccupancyGrid)</small></h4>
               </header>
-              <p>Mapa de ocupación global derivado del grafo de poses. Se muestra en el visor inferior.</p>
+              <p>Mapa de ocupación global derivado del grafo de poses. Se muestra abajo en tiempo real.</p>
               <button id="btn-request-dynamic-map" class="slam-action-btn">Solicitar snapshot vía /slam_toolbox/dynamic_map</button>
               <pre id="slam-map-meta" class="slam-meta">Dimensiones: — · Resolución: — · Origen: —</pre>
             </article>
@@ -434,13 +434,11 @@ les -->
               <header>
                 <h4>/pose <small>(geometry_msgs/PoseWithCovarianceStamped)</small></h4>
               </header>
-              <p>Pose estimada del robot en el marco del mapa; útil para depuración y localización.</p>
+              <p>Pose estimada del robot en el marco del mapa; se refleja con la flecha azul.</p>
               <pre id="slam-pose-output" class="slam-meta">Sin datos</pre>
             </article>
           </div>
         </div>
-      </div>
-      <div class="slam-column">
         <div class="slam-card">
           <h3>Servicios slam_toolbox</h3>
           <div class="slam-card-body slam-services">
@@ -456,8 +454,16 @@ les -->
           <div id="slam-service-feedback" class="slam-meta" style="margin-top:0.5em;">Selecciona un servicio para ejecutarlo.</div>
         </div>
       </div>
+      <div class="mapa-viewer">
+        <div class="mapa-viewer-header">
+          <h3>Mapa en vivo</h3>
+          <span class="mapa-viewer-subtitle">Fuente: /map &nbsp;|&nbsp; Pose: /pose</span>
+        </div>
+        <div id="mapa-canvas" class="mapa-canvas">
+          <div class="mapa-placeholder">Conéctate a ROS para visualizar el mapa.</div>
+        </div>
+      </div>
     </div>
-    <div id="mapa-canvas" style="width:100%;height:60vh;"></div> <!-- ← NUEVO -->
   </section>
 
 

@@ -8,11 +8,22 @@ const datosRos    = document.getElementById('datos-ros');
 const slamStatusDot   = document.getElementById('slam-status-dot');
 const slamStatusText  = document.getElementById('slam-status-text');
 const slamLastUpdate  = document.getElementById('slam-last-update');
+const mapaCanvas      = document.getElementById('mapa-canvas');
+const slamMapMeta     = document.getElementById('slam-map-meta');
+const slamPoseOutput  = document.getElementById('slam-pose-output');
+const slamServiceFeedback = document.getElementById('slam-service-feedback');
+const dynamicMapButton = document.getElementById('btn-request-dynamic-map');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
 let slamMapMonitor = null;
 let slamPoseMonitor = null;
+let ros2dViewer = null;
+let ros2dGridClient = null;
+let ros2dRobotArrow = null;
+let ros2dPoseSub = null;
+let ros2dResizeObserver = null;
+let dynamicMapService = null;
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -26,6 +37,7 @@ if (slamStatusDot) {
 }
 if (slamStatusText) slamStatusText.textContent = 'SLAMToolbox: Sin datos';
 if (slamLastUpdate) slamLastUpdate.textContent = 'Última actualización: —';
+if (slamServiceFeedback) slamServiceFeedback.style.color = '#9e9e9e';
 
 function setSlamIndicator(state, message) {
   if (slamStatusDot) {
@@ -63,7 +75,6 @@ function markSlamHeartbeat(origen) {
   if (slamHeartbeatTimer) clearTimeout(slamHeartbeatTimer);
   slamHeartbeatTimer = setTimeout(() => {
     setSlamIndicator('idle', 'SLAMToolbox: Conectado (sin datos recientes)');
-    setSlamLastUpdate(null);
   }, SLAM_HEARTBEAT_TIMEOUT_MS);
 }
 
@@ -77,7 +88,10 @@ function startSlamMonitoring() {
       queue_length: 1,
       throttle_rate: 2000
     });
-    slamMapMonitor.subscribe(() => markSlamHeartbeat('mapa'));
+    slamMapMonitor.subscribe(msg => {
+      markSlamHeartbeat('mapa');
+      updateMapMetadata(msg);
+    });
   }
   if (!slamPoseMonitor) {
     slamPoseMonitor = new ROSLIB.Topic({
@@ -87,7 +101,10 @@ function startSlamMonitoring() {
       queue_length: 1,
       throttle_rate: 1500
     });
-    slamPoseMonitor.subscribe(() => markSlamHeartbeat('pose'));
+    slamPoseMonitor.subscribe(msg => {
+      markSlamHeartbeat('pose');
+      updatePosePanel(msg);
+    });
   }
   setSlamIndicator('idle', 'SLAMToolbox: Conectado (esperando datos)');
   setSlamLastUpdate(null);
@@ -106,6 +123,310 @@ function stopSlamMonitoring() {
     slamPoseMonitor.unsubscribe();
     slamPoseMonitor = null;
   }
+  if (slamMapMeta) {
+    slamMapMeta.textContent = 'Dimensiones: — · Resolución: — · Origen: —';
+  }
+  if (slamPoseOutput) {
+    slamPoseOutput.textContent = 'Sin datos';
+  }
+}
+
+function renderMapaPlaceholder(texto) {
+  if (!mapaCanvas) return;
+  mapaCanvas.innerHTML = `<div class="mapa-placeholder">${texto}</div>`;
+}
+
+function quaternionToYaw(q) {
+  const x = q?.x || 0;
+  const y = q?.y || 0;
+  const z = q?.z || 0;
+  const w = q?.w ?? 1;
+  const siny_cosp = 2 * (w * z + x * y);
+  const cosy_cosp = 1 - 2 * (y * y + z * z);
+  return Math.atan2(siny_cosp, cosy_cosp);
+}
+
+function updateMapMetadata(msg) {
+  if (!slamMapMeta || !msg || !msg.info) return;
+  const info = msg.info;
+  const width = Number(info.width) || 0;
+  const height = Number(info.height) || 0;
+  const resolution = typeof info.resolution === 'number' ? info.resolution : 0;
+  const sizeX = (width * resolution).toFixed(2);
+  const sizeY = (height * resolution).toFixed(2);
+  const origin = info.origin && info.origin.position ? info.origin.position : { x: 0, y: 0 };
+  const originX = Number(origin.x || 0).toFixed(2);
+  const originY = Number(origin.y || 0).toFixed(2);
+  slamMapMeta.textContent = `Dimensiones: ${width}×${height} celdas (${sizeX}×${sizeY} m) · Resolución: ${resolution.toFixed(3)} m/celda · Origen: [${originX}, ${originY}]`;
+}
+
+function updatePosePanel(msg) {
+  if (!slamPoseOutput) return;
+  const poseStamped = msg?.pose?.pose ? msg.pose.pose : msg?.pose ? msg.pose : msg;
+  if (!poseStamped || !poseStamped.position) {
+    slamPoseOutput.textContent = 'Sin datos';
+    return;
+  }
+  const pos = poseStamped.position;
+  const orient = poseStamped.orientation || {};
+  const yaw = quaternionToYaw(orient);
+  const yawDeg = (yaw * 180 / Math.PI).toFixed(1);
+
+  let covInfo = 'Covarianza: no disponible';
+  const cov = msg?.pose?.covariance;
+  if (Array.isArray(cov) && cov.length >= 36) {
+    const sigmaX = Math.sqrt(Math.max(cov[0], 0)).toFixed(3);
+    const sigmaY = Math.sqrt(Math.max(cov[7], 0)).toFixed(3);
+    const sigmaTheta = Math.sqrt(Math.max(cov[35], 0)).toFixed(3);
+    covInfo = `σx: ${sigmaX} m · σy: ${sigmaY} m · σθ: ${sigmaTheta} rad`;
+  }
+
+  slamPoseOutput.textContent =
+    `x: ${(Number(pos.x) || 0).toFixed(3)} m\n` +
+    `y: ${(Number(pos.y) || 0).toFixed(3)} m\n` +
+    `z: ${(Number(pos.z) || 0).toFixed(3)} m\n` +
+    `yaw: ${yawDeg}°\n` +
+    covInfo;
+}
+
+function ensureRos2dViewer() {
+  if (!mapaCanvas) return;
+  if (ros2dViewer) return;
+  if (!window.ros || !window.ros.isConnected) {
+    renderMapaPlaceholder('Conéctate a ROS para visualizar el mapa.');
+    return;
+  }
+  if (typeof ROS2D === 'undefined') {
+    renderMapaPlaceholder('ROS2D no está disponible. Verifica la carga de ros2d.min.js.');
+    return;
+  }
+
+  mapaCanvas.innerHTML = '';
+  const width = mapaCanvas.clientWidth || 960;
+  const height = mapaCanvas.clientHeight || Math.max(480, Math.round(width * 0.6));
+
+  ros2dViewer = new ROS2D.Viewer({
+    divID: 'mapa-canvas',
+    width,
+    height,
+    antialias: true
+  });
+
+  ros2dGridClient = new ROS2D.OccupancyGridClient({
+    ros: window.ros,
+    rootObject: ros2dViewer.scene,
+    topic: '/map',
+    continuous: true
+  });
+
+  ros2dGridClient.on('change', () => {
+    if (!ros2dViewer || !ros2dGridClient || !ros2dGridClient.currentGrid) return;
+    const grid = ros2dGridClient.currentGrid;
+    const widthMeters = (grid.width || 0) * (grid.resolution || 1);
+    const heightMeters = (grid.height || 0) * (grid.resolution || 1);
+    if (widthMeters && heightMeters) {
+      ros2dViewer.scaleToDimensions(widthMeters, heightMeters);
+    }
+    const pose = grid.pose || { position: { x: 0, y: 0 } };
+    ros2dViewer.shift(pose.position.x || 0, pose.position.y || 0);
+  });
+
+  ros2dRobotArrow = new ROS2D.NavigationArrow({
+    size: 0.4,
+    strokeSize: 0.03,
+    fillColor: createjs.Graphics.getRGB(66, 165, 245, 0.95),
+    pulse: false
+  });
+  ros2dRobotArrow.visible = false;
+  ros2dViewer.scene.addChild(ros2dRobotArrow);
+
+  if (!ros2dPoseSub) {
+    ros2dPoseSub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/pose',
+      messageType: 'geometry_msgs/PoseWithCovarianceStamped',
+      queue_length: 1,
+      throttle_rate: 200
+    });
+    ros2dPoseSub.subscribe(msg => {
+      if (!ros2dRobotArrow) return;
+      const pose = msg?.pose?.pose;
+      if (!pose || !pose.position) return;
+      ros2dRobotArrow.x = pose.position.x || 0;
+      ros2dRobotArrow.y = -(pose.position.y || 0);
+      ros2dRobotArrow.rotation = -quaternionToYaw(pose.orientation || {}) * 180 / Math.PI;
+      ros2dRobotArrow.visible = true;
+    });
+  }
+
+  if ('ResizeObserver' in window && !ros2dResizeObserver) {
+    ros2dResizeObserver = new ResizeObserver(() => {
+      if (!ros2dViewer) return;
+      const newWidth = mapaCanvas.clientWidth;
+      const newHeight = mapaCanvas.clientHeight;
+      if (newWidth && newHeight && typeof ros2dViewer.resize === 'function') {
+        ros2dViewer.resize(newWidth, newHeight);
+      }
+    });
+    ros2dResizeObserver.observe(mapaCanvas);
+  }
+}
+
+function destroyRos2dViewer() {
+  if (ros2dPoseSub) {
+    ros2dPoseSub.unsubscribe();
+    ros2dPoseSub = null;
+  }
+  if (ros2dGridClient) {
+    if (typeof ros2dGridClient.unsubscribe === 'function') {
+      ros2dGridClient.unsubscribe();
+    }
+    ros2dGridClient = null;
+  }
+  if (ros2dViewer && ros2dViewer.scene) {
+    ros2dViewer.scene.removeAllChildren();
+  }
+  ros2dViewer = null;
+  ros2dRobotArrow = null;
+  if (ros2dResizeObserver && mapaCanvas) {
+    ros2dResizeObserver.disconnect();
+    ros2dResizeObserver = null;
+  }
+  if (mapaCanvas) {
+    mapaCanvas.innerHTML = '';
+  }
+}
+
+function showSlamServiceFeedback(text, isError = false) {
+  if (!slamServiceFeedback) return;
+  slamServiceFeedback.textContent = text;
+  slamServiceFeedback.style.color = isError ? '#ffb3b3' : '#a5d6a7';
+}
+
+function requestDynamicMap(button) {
+  if (!window.ros || !window.ros.isConnected) {
+    showSlamServiceFeedback('No hay conexión con ROS. Conéctate antes de solicitar el mapa.', true);
+    return;
+  }
+  if (!button) return;
+  button.disabled = true;
+  showSlamServiceFeedback('Solicitando snapshot del mapa...', false);
+  if (!dynamicMapService) {
+    dynamicMapService = new ROSLIB.Service({
+      ros: window.ros,
+      name: '/slam_toolbox/dynamic_map',
+      serviceType: 'nav_msgs/srv/GetMap'
+    });
+  }
+  dynamicMapService.callService(new ROSLIB.ServiceRequest({}), respuesta => {
+    button.disabled = false;
+    const mapa = respuesta?.map || respuesta;
+    if (mapa && mapa.info) {
+      updateMapMetadata(mapa);
+      markSlamHeartbeat('dynamic_map');
+      showSlamServiceFeedback('Snapshot del mapa recibido correctamente.', false);
+    } else {
+      showSlamServiceFeedback('Respuesta vacía del servicio dynamic_map.', true);
+    }
+  }, error => {
+    button.disabled = false;
+    showSlamServiceFeedback(`Error al solicitar dynamic_map: ${error}`, true);
+  });
+}
+
+function executeSlamServiceButton(button) {
+  if (!button || !button.dataset) return;
+  if (!window.ros || !window.ros.isConnected) {
+    showSlamServiceFeedback('No hay conexión con ROS. No se puede ejecutar el servicio.', true);
+    return;
+  }
+
+  const serviceName = button.dataset.slamService;
+  const serviceType = button.dataset.slamType;
+  if (!serviceName || !serviceType) return;
+
+  let requestPayload = {};
+
+  switch (serviceType) {
+    case 'slam_toolbox/DeserializePoseGraph': {
+      const filename = prompt('Ruta del archivo serializado a cargar (.posegraph/.data):', '');
+      if (!filename) {
+        showSlamServiceFeedback('Operación cancelada. Se requiere una ruta válida.', true);
+        return;
+      }
+      const matchPrompt = prompt('Modo de arranque (0=UNSET, 1=START_AT_FIRST_NODE, 2=START_AT_GIVEN_POSE, 3=LOCALIZE_AT_POSE):', '1');
+      const matchType = Number.parseInt(matchPrompt ?? '1', 10);
+      let initialPose = { x: 0, y: 0, theta: 0 };
+      if (matchType === 2 || matchType === 3) {
+        const posePrompt = prompt('Introduce la pose inicial (x y theta) en metros y radianes, separados por espacio:', '0 0 0');
+        if (!posePrompt) {
+          showSlamServiceFeedback('Carga cancelada. Falta la pose inicial.', true);
+          return;
+        }
+        const [xStr, yStr, thetaStr] = posePrompt.trim().split(/\s+/);
+        initialPose = {
+          x: Number.parseFloat(xStr ?? '0') || 0,
+          y: Number.parseFloat(yStr ?? '0') || 0,
+          theta: Number.parseFloat(thetaStr ?? '0') || 0
+        };
+      }
+      requestPayload = {
+        filename,
+        match_type: Number.isFinite(matchType) ? matchType : 1,
+        initial_pose: initialPose
+      };
+      break;
+    }
+    case 'slam_toolbox/SerializePoseGraph': {
+      const filename = prompt('Nombre base del archivo de salida (sin extensión):', 'posegraph');
+      if (!filename) {
+        showSlamServiceFeedback('Serialización cancelada. Se requiere un nombre.', true);
+        return;
+      }
+      requestPayload = { filename };
+      break;
+    }
+    case 'slam_toolbox/SaveMap': {
+      const mapName = prompt('Nombre base del mapa a guardar (generará .pgm y .yaml):', 'slam_toolbox_map');
+      if (!mapName) {
+        showSlamServiceFeedback('Guardado cancelado. Se requiere un nombre.', true);
+        return;
+      }
+      requestPayload = { name: { data: mapName } };
+      break;
+    }
+    case 'slam_toolbox/Reset': {
+      const shouldPause = confirm('¿Deseas pausar nuevas mediciones inmediatamente después del reset?');
+      requestPayload = { pause_new_measurements: shouldPause };
+      break;
+    }
+    default:
+      requestPayload = {};
+      break;
+  }
+
+  button.disabled = true;
+  showSlamServiceFeedback(`Ejecutando ${serviceName}...`, false);
+
+  const servicio = new ROSLIB.Service({
+    ros: window.ros,
+    name: serviceName,
+    serviceType
+  });
+
+  servicio.callService(new ROSLIB.ServiceRequest(requestPayload), respuesta => {
+    button.disabled = false;
+    if (serviceType === 'slam_toolbox/Pause' && respuesta && 'status' in respuesta) {
+      showSlamServiceFeedback(`Pausa de nuevas mediciones: ${respuesta.status ? 'activada' : 'desactivada'}.`, false);
+    } else if (respuesta && Object.keys(respuesta).length) {
+      showSlamServiceFeedback(`Servicio ${serviceName} completado (${JSON.stringify(respuesta)}).`, false);
+    } else {
+      showSlamServiceFeedback(`Servicio ${serviceName} completado.`, false);
+    }
+  }, error => {
+    button.disabled = false;
+    showSlamServiceFeedback(`Error al ejecutar ${serviceName}: ${error}`, true);
+  });
 }
 
 // EXPONER la misma instancia al resto del dashboard
@@ -117,6 +438,9 @@ ros.on('connection', function () {
   if (rosStatus)   rosStatus.textContent   = '🟢 Conectado';
   if (topicStatus) topicStatus.textContent = '—';
   startSlamMonitoring();
+  if (activeTab === 'mapa') {
+    ensureRos2dViewer();
+  }
 });
 
 ros.on('close', function () {
@@ -125,6 +449,8 @@ ros.on('close', function () {
   stopSlamMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
+  destroyRos2dViewer();
+  renderMapaPlaceholder('Conéctate a ROS para visualizar el mapa.');
 });
 
 ros.on('error', function () {
@@ -133,6 +459,8 @@ ros.on('error', function () {
   stopSlamMonitoring();
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
+  destroyRos2dViewer();
+  renderMapaPlaceholder('Error al conectar con ROS. Reintenta para recuperar el mapa.');
 });
 
 // (Opcional) Auto-reconexión simple
@@ -209,6 +537,7 @@ setInterval(() => {
 // ========================
 const sections = document.querySelectorAll('main > section');
 const navLinks = document.querySelectorAll('nav a[data-tab]');
+let activeTab = null;
 
 function showTab(tabId) {
   sections.forEach(section => {
@@ -217,11 +546,16 @@ function showTab(tabId) {
   navLinks.forEach(link => {
     link.classList.toggle('active', link.dataset.tab === tabId);
   });
+  activeTab = tabId;
 
   // --- Refresca dropdown de monitoreo si es la pestaña 'monitoreo' ---
   if (tabId === 'monitoreo') {
     // Espera a que el DOM haga visible la sección antes de poblar el dropdown
     setTimeout(actualizarMonitorDropdownAuto, 30);
+  }
+
+  if (tabId === 'mapa') {
+    ensureRos2dViewer();
   }
 }
 
@@ -249,6 +583,15 @@ navLinks.forEach(link => {
 // Carga la pestaña correcta al cargar la página y al cambiar el hash
 window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', handleHashChange);
+
+if (dynamicMapButton) {
+  dynamicMapButton.addEventListener('click', () => requestDynamicMap(dynamicMapButton));
+}
+
+const slamServiceButtons = document.querySelectorAll('.slam-action-btn[data-slam-service]');
+slamServiceButtons.forEach(btn => {
+  btn.addEventListener('click', () => executeSlamServiceButton(btn));
+});
 
 // ========================
 // 5. Visualización de Nodos y Tópicos ROS
