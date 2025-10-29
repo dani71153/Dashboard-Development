@@ -249,6 +249,59 @@ nav a.active {
   min-width: 0;
 }
 
+.xy-controls {
+  background: rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+}
+
+.xy-poi-form {
+  display: grid;
+  gap: var(--spacing-sm);
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  align-items: end;
+}
+
+.xy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.xy-field input {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: var(--border-radius-sm);
+  padding: 0.35rem 0.5rem;
+  color: var(--text-primary);
+}
+
+.xy-poi-form button {
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--border-radius-sm);
+  background: linear-gradient(120deg, rgba(59, 130, 246, 0.9), rgba(14, 116, 144, 0.9));
+  border: none;
+  color: #e2f3ff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.xy-poi-form button.xy-add-current {
+  background: rgba(94, 234, 212, 0.18);
+  color: #5eead4;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+}
+
+.xy-poi-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .mapa-viewer-header {
   display: flex;
   align-items: baseline;
@@ -285,6 +338,74 @@ nav a.active {
   left: 0;
 }
 
+.xy-poi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.xy-poi-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.xy-poi-item {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--border-radius-sm);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.xy-poi-meta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.xy-poi-meta strong {
+  color: #e2e8f0;
+  font-size: 0.85rem;
+}
+
+.xy-poi-coords {
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.xy-poi-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.xy-remove-btn {
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  border-radius: var(--border-radius-sm);
+  color: rgba(248, 113, 113, 0.9);
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background 0.2s ease;
+}
+
+.xy-remove-btn:hover {
+  background: rgba(248, 113, 113, 0.18);
+}
+
 .mapa-placeholder {
   position: absolute;
   inset: 0;
@@ -296,7 +417,8 @@ nav a.active {
   color: #dbeafe;
   font-size: 0.95rem;
   backdrop-filter: blur(1px);
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(15, 23, 42, 0.58);
+  pointer-events: none;
 }
 
 .status-dot {

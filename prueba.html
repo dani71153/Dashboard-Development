@@ -457,10 +457,35 @@ les -->
       <div class="mapa-viewer">
         <div class="mapa-viewer-header">
           <h3>Mapa en vivo</h3>
-          <span class="mapa-viewer-subtitle">Fuente: /map &nbsp;|&nbsp; Pose: /pose</span>
+          <span class="mapa-viewer-subtitle">Plano XY manual · Pose: /pose</span>
+        </div>
+        <div class="xy-controls">
+          <form id="xy-poi-form" class="xy-poi-form">
+            <label for="xy-poi-name" class="xy-field">
+              <span>Etiqueta</span>
+              <input type="text" id="xy-poi-name" name="name" placeholder="Punto" maxlength="32">
+            </label>
+            <label for="xy-poi-x" class="xy-field">
+              <span>X (m)</span>
+              <input type="number" id="xy-poi-x" name="x" step="0.01" value="0">
+            </label>
+            <label for="xy-poi-y" class="xy-field">
+              <span>Y (m)</span>
+              <input type="number" id="xy-poi-y" name="y" step="0.01" value="0">
+            </label>
+            <label for="xy-poi-yaw" class="xy-field">
+              <span>Yaw (°)</span>
+              <input type="number" id="xy-poi-yaw" name="yaw" step="1" value="0">
+            </label>
+            <button type="submit" class="xy-add-btn">Agregar punto</button>
+            <button type="button" id="xy-poi-use-current" class="xy-add-current">Usar pose actual</button>
+          </form>
         </div>
         <div id="mapa-canvas" class="mapa-canvas">
           <div class="mapa-placeholder">Conéctate a ROS para visualizar el mapa.</div>
+        </div>
+        <div id="xy-poi-list" class="xy-poi-list">
+          <div class="xy-poi-empty">Agrega puntos para destacarlos en el plano.</div>
         </div>
       </div>
     </div>

@@ -13,17 +13,33 @@ const slamMapMeta     = document.getElementById('slam-map-meta');
 const slamPoseOutput  = document.getElementById('slam-pose-output');
 const slamServiceFeedback = document.getElementById('slam-service-feedback');
 const dynamicMapButton = document.getElementById('btn-request-dynamic-map');
+const xyPoiForm = document.getElementById('xy-poi-form');
+const xyPoiList = document.getElementById('xy-poi-list');
+const xyUseCurrentBtn = document.getElementById('xy-poi-use-current');
+const xyNameInput = document.getElementById('xy-poi-name');
+const xyXInput = document.getElementById('xy-poi-x');
+const xyYInput = document.getElementById('xy-poi-y');
+const xyYawInput = document.getElementById('xy-poi-yaw');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
 let slamMapMonitor = null;
 let slamPoseMonitor = null;
-let ros2dViewer = null;
-let ros2dGridClient = null;
-let ros2dRobotArrow = null;
-let ros2dPoseSub = null;
-let ros2dResizeObserver = null;
 let dynamicMapService = null;
+const XY_SCALE_PX_PER_M = 80;
+const XY_GRID_STEP_METERS = 1;
+const XY_MAJOR_GRID_EVERY = 5;
+const XY_POI_ARROW_SIZE_M = 0.45;
+let xyCanvas = null;
+let xyCtx = null;
+let xyResizeObserver = null;
+let xyOrigin = { x: 0, y: 0 };
+let xyPose = { x: 0, y: 0, yaw: 0, hasPose: false };
+let xyPois = [];
+let xyPoiId = 0;
+let xyWindowResizeHandlerRegistered = false;
+let xyCanvasWidth = 0;
+let xyCanvasHeight = 0;
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -129,11 +145,29 @@ function stopSlamMonitoring() {
   if (slamPoseOutput) {
     slamPoseOutput.textContent = 'Sin datos';
   }
+  clearXYRobotPose();
 }
 
 function renderMapaPlaceholder(texto) {
   if (!mapaCanvas) return;
-  mapaCanvas.innerHTML = `<div class="mapa-placeholder">${texto}</div>`;
+  let placeholder = mapaCanvas.querySelector('.mapa-placeholder');
+  if (!placeholder) {
+    placeholder = document.createElement('div');
+    placeholder.className = 'mapa-placeholder';
+    mapaCanvas.appendChild(placeholder);
+  } else {
+    mapaCanvas.appendChild(placeholder);
+  }
+  placeholder.textContent = texto;
+  placeholder.style.display = 'flex';
+}
+
+function hideMapaPlaceholder() {
+  if (!mapaCanvas) return;
+  const placeholder = mapaCanvas.querySelector('.mapa-placeholder');
+  if (placeholder) {
+    placeholder.style.display = 'none';
+  }
 }
 
 function quaternionToYaw(q) {
@@ -165,6 +199,7 @@ function updatePosePanel(msg) {
   const poseStamped = msg?.pose?.pose ? msg.pose.pose : msg?.pose ? msg.pose : msg;
   if (!poseStamped || !poseStamped.position) {
     slamPoseOutput.textContent = 'Sin datos';
+    clearXYRobotPose();
     return;
   }
   const pos = poseStamped.position;
@@ -187,114 +222,371 @@ function updatePosePanel(msg) {
     `z: ${(Number(pos.z) || 0).toFixed(3)} m\n` +
     `yaw: ${yawDeg}°\n` +
     covInfo;
+
+  updateXYRobotPose(Number(pos.x) || 0, Number(pos.y) || 0, yaw);
 }
 
 function ensureRos2dViewer() {
   if (!mapaCanvas) return;
-  if (ros2dViewer) return;
-  if (!window.ros || !window.ros.isConnected) {
-    renderMapaPlaceholder('Conéctate a ROS para visualizar el mapa.');
-    return;
-  }
-  if (typeof ROS2D === 'undefined') {
-    renderMapaPlaceholder('ROS2D no está disponible. Verifica la carga de ros2d.min.js.');
-    return;
-  }
 
-  mapaCanvas.innerHTML = '';
-  const width = mapaCanvas.clientWidth || 960;
-  const height = mapaCanvas.clientHeight || Math.max(480, Math.round(width * 0.6));
+  if (!xyCanvas) {
+    xyCanvas = document.createElement('canvas');
+    xyCanvas.id = 'mapa-xy-canvas';
+    xyCanvas.className = 'mapa-xy-canvas';
+    xyCanvas.style.width = '100%';
+    xyCanvas.style.height = '100%';
+    mapaCanvas.insertBefore(xyCanvas, mapaCanvas.firstChild);
+    xyCtx = xyCanvas.getContext('2d');
+    resizeXYCanvas();
 
-  ros2dViewer = new ROS2D.Viewer({
-    divID: 'mapa-canvas',
-    width,
-    height,
-    antialias: true
-  });
-
-  ros2dGridClient = new ROS2D.OccupancyGridClient({
-    ros: window.ros,
-    rootObject: ros2dViewer.scene,
-    topic: '/map',
-    continuous: true
-  });
-
-  ros2dGridClient.on('change', () => {
-    if (!ros2dViewer || !ros2dGridClient || !ros2dGridClient.currentGrid) return;
-    const grid = ros2dGridClient.currentGrid;
-    const widthMeters = (grid.width || 0) * (grid.resolution || 1);
-    const heightMeters = (grid.height || 0) * (grid.resolution || 1);
-    if (widthMeters && heightMeters) {
-      ros2dViewer.scaleToDimensions(widthMeters, heightMeters);
+    if ('ResizeObserver' in window) {
+      xyResizeObserver = new ResizeObserver(() => resizeXYCanvas());
+      xyResizeObserver.observe(mapaCanvas);
+    } else if (!xyWindowResizeHandlerRegistered) {
+      window.addEventListener('resize', resizeXYCanvas);
+      xyWindowResizeHandlerRegistered = true;
     }
-    const pose = grid.pose || { position: { x: 0, y: 0 } };
-    ros2dViewer.shift(pose.position.x || 0, pose.position.y || 0);
-  });
-
-  ros2dRobotArrow = new ROS2D.NavigationArrow({
-    size: 0.4,
-    strokeSize: 0.03,
-    fillColor: createjs.Graphics.getRGB(66, 165, 245, 0.95),
-    pulse: false
-  });
-  ros2dRobotArrow.visible = false;
-  ros2dViewer.scene.addChild(ros2dRobotArrow);
-
-  if (!ros2dPoseSub) {
-    ros2dPoseSub = new ROSLIB.Topic({
-      ros: window.ros,
-      name: '/pose',
-      messageType: 'geometry_msgs/PoseWithCovarianceStamped',
-      queue_length: 1,
-      throttle_rate: 200
-    });
-    ros2dPoseSub.subscribe(msg => {
-      if (!ros2dRobotArrow) return;
-      const pose = msg?.pose?.pose;
-      if (!pose || !pose.position) return;
-      ros2dRobotArrow.x = pose.position.x || 0;
-      ros2dRobotArrow.y = -(pose.position.y || 0);
-      ros2dRobotArrow.rotation = -quaternionToYaw(pose.orientation || {}) * 180 / Math.PI;
-      ros2dRobotArrow.visible = true;
-    });
   }
 
-  if ('ResizeObserver' in window && !ros2dResizeObserver) {
-    ros2dResizeObserver = new ResizeObserver(() => {
-      if (!ros2dViewer) return;
-      const newWidth = mapaCanvas.clientWidth;
-      const newHeight = mapaCanvas.clientHeight;
-      if (newWidth && newHeight && typeof ros2dViewer.resize === 'function') {
-        ros2dViewer.resize(newWidth, newHeight);
-      }
-    });
-    ros2dResizeObserver.observe(mapaCanvas);
+  const placeholder = mapaCanvas.querySelector('.mapa-placeholder');
+  if (placeholder) {
+    mapaCanvas.appendChild(placeholder);
   }
+
+  hideMapaPlaceholder();
+  drawXYScene();
+}
+
+function resizeXYCanvas() {
+  if (!xyCanvas || !xyCtx || !mapaCanvas) return;
+  const width = mapaCanvas.clientWidth || mapaCanvas.offsetWidth || 0;
+  const height = mapaCanvas.clientHeight || mapaCanvas.offsetHeight || 0;
+  if (!width || !height) return;
+
+  const ratio = window.devicePixelRatio || 1;
+  xyCanvasWidth = width;
+  xyCanvasHeight = height;
+
+  xyCanvas.width = Math.round(width * ratio);
+  xyCanvas.height = Math.round(height * ratio);
+  xyCanvas.style.width = `${width}px`;
+  xyCanvas.style.height = `${height}px`;
+
+  xyCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  xyCtx.imageSmoothingEnabled = true;
+
+  xyOrigin = { x: width / 2, y: height / 2 };
+
+  drawXYScene();
+}
+
+function drawXYScene() {
+  if (!xyCtx || !xyCanvasWidth || !xyCanvasHeight) return;
+
+  xyCtx.clearRect(0, 0, xyCanvasWidth, xyCanvasHeight);
+  drawXYGrid();
+  drawXYAxes();
+  drawXYPois();
+  drawXYRobotPose();
+}
+
+function drawXYGrid() {
+  if (!xyCtx || XY_SCALE_PX_PER_M <= 0) return;
+  const step = XY_GRID_STEP_METERS;
+  if (step <= 0) return;
+
+  const halfWidthM = xyCanvasWidth / (2 * XY_SCALE_PX_PER_M);
+  const halfHeightM = xyCanvasHeight / (2 * XY_SCALE_PX_PER_M);
+  const majorEvery = Math.max(1, XY_MAJOR_GRID_EVERY);
+  const maxStepsX = Math.ceil(halfWidthM / step);
+  const maxStepsY = Math.ceil(halfHeightM / step);
+
+  xyCtx.save();
+  xyCtx.lineWidth = 1;
+
+  const drawVertical = (meters, isMajor) => {
+    const { x } = worldToScreen(meters, 0);
+    if (x < 0 || x > xyCanvasWidth) return;
+    xyCtx.beginPath();
+    xyCtx.moveTo(Math.round(x) + 0.5, 0);
+    xyCtx.lineTo(Math.round(x) + 0.5, xyCanvasHeight);
+    xyCtx.strokeStyle = isMajor ? 'rgba(59, 130, 246, 0.28)' : 'rgba(148, 163, 184, 0.14)';
+    xyCtx.stroke();
+  };
+
+  const drawHorizontal = (meters, isMajor) => {
+    const { y } = worldToScreen(0, meters);
+    if (y < 0 || y > xyCanvasHeight) return;
+    xyCtx.beginPath();
+    xyCtx.moveTo(0, Math.round(y) + 0.5);
+    xyCtx.lineTo(xyCanvasWidth, Math.round(y) + 0.5);
+    xyCtx.strokeStyle = isMajor ? 'rgba(59, 130, 246, 0.28)' : 'rgba(148, 163, 184, 0.14)';
+    xyCtx.stroke();
+  };
+
+  for (let i = 1; i <= maxStepsX; i += 1) {
+    const meters = i * step;
+    const isMajor = i % majorEvery === 0;
+    drawVertical(meters, isMajor);
+    drawVertical(-meters, isMajor);
+  }
+
+  for (let j = 1; j <= maxStepsY; j += 1) {
+    const meters = j * step;
+    const isMajor = j % majorEvery === 0;
+    drawHorizontal(meters, isMajor);
+    drawHorizontal(-meters, isMajor);
+  }
+
+  xyCtx.restore();
+}
+
+function drawXYAxes() {
+  if (!xyCtx) return;
+  xyCtx.save();
+  xyCtx.lineWidth = 1.4;
+  xyCtx.strokeStyle = 'rgba(148, 197, 255, 0.5)';
+
+  xyCtx.beginPath();
+  xyCtx.moveTo(Math.round(xyOrigin.x) + 0.5, 0);
+  xyCtx.lineTo(Math.round(xyOrigin.x) + 0.5, xyCanvasHeight);
+  xyCtx.moveTo(0, Math.round(xyOrigin.y) + 0.5);
+  xyCtx.lineTo(xyCanvasWidth, Math.round(xyOrigin.y) + 0.5);
+  xyCtx.stroke();
+
+  xyCtx.fillStyle = 'rgba(191, 219, 254, 0.75)';
+  xyCtx.font = '11px "Fira Code", monospace';
+  xyCtx.fillText('+Y', xyOrigin.x + 6, 16);
+  xyCtx.fillText('-Y', xyOrigin.x + 6, xyCanvasHeight - 8);
+  xyCtx.fillText('+X', xyCanvasWidth - 30, xyOrigin.y - 6);
+  xyCtx.fillText('-X', 8, xyOrigin.y - 6);
+
+  xyCtx.restore();
+}
+
+function drawXYRobotPose() {
+  if (!xyCtx || !xyPose.hasPose) return;
+  const { x, y } = worldToScreen(xyPose.x, xyPose.y);
+  if (x < -40 || x > xyCanvasWidth + 40 || y < -40 || y > xyCanvasHeight + 40) return;
+
+  const arrowSize = Math.max(22, XY_POI_ARROW_SIZE_M * XY_SCALE_PX_PER_M * 1.4);
+
+  xyCtx.save();
+  xyCtx.translate(x, y);
+  xyCtx.rotate(-xyPose.yaw);
+  xyCtx.globalAlpha = 0.95;
+
+  xyCtx.beginPath();
+  xyCtx.moveTo(0, -arrowSize * 0.7);
+  xyCtx.lineTo(arrowSize * 0.5, arrowSize * 0.6);
+  xyCtx.lineTo(-arrowSize * 0.5, arrowSize * 0.6);
+  xyCtx.closePath();
+  xyCtx.fillStyle = 'rgba(96, 165, 250, 0.95)';
+  xyCtx.fill();
+  xyCtx.lineWidth = 2.4;
+  xyCtx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+  xyCtx.stroke();
+
+  xyCtx.restore();
+
+  xyCtx.save();
+  xyCtx.globalAlpha = 0.9;
+  xyCtx.lineWidth = 1.4;
+  xyCtx.strokeStyle = 'rgba(147, 197, 253, 0.85)';
+  xyCtx.beginPath();
+  xyCtx.arc(x, y, Math.max(10, arrowSize * 0.35), 0, Math.PI * 2);
+  xyCtx.stroke();
+  xyCtx.restore();
+
+  xyCtx.save();
+  xyCtx.fillStyle = 'rgba(191, 219, 254, 0.85)';
+  xyCtx.font = '12px "Fira Code", monospace';
+  xyCtx.fillText(`(${xyPose.x.toFixed(2)}, ${xyPose.y.toFixed(2)}) m`, x + 12, y - 10);
+  xyCtx.restore();
+}
+
+function drawXYPois() {
+  if (!xyCtx || !xyPois?.length) return;
+
+  xyPois.forEach(poi => {
+    const { x, y } = worldToScreen(poi.x, poi.y);
+    if (x < -40 || x > xyCanvasWidth + 40 || y < -40 || y > xyCanvasHeight + 40) return;
+
+    xyCtx.save();
+    xyCtx.globalAlpha = 0.9;
+    xyCtx.fillStyle = poi.color;
+    xyCtx.beginPath();
+    xyCtx.arc(x, y, 6, 0, Math.PI * 2);
+    xyCtx.fill();
+    xyCtx.lineWidth = 1.2;
+    xyCtx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+    xyCtx.stroke();
+    xyCtx.restore();
+
+    if (poi.hasYaw) {
+      drawOrientationArrow(poi.x, poi.y, poi.yaw, poi.color, XY_POI_ARROW_SIZE_M);
+    }
+
+    xyCtx.save();
+    xyCtx.fillStyle = 'rgba(226, 232, 240, 0.9)';
+    xyCtx.font = '11px "Fira Code", monospace';
+    xyCtx.fillText(`${poi.name} (${poi.x.toFixed(2)}, ${poi.y.toFixed(2)})`, x + 10, y - 8);
+    xyCtx.restore();
+  });
+}
+
+function drawOrientationArrow(wx, wy, yaw, color, sizeMeters = XY_POI_ARROW_SIZE_M) {
+  if (!xyCtx) return;
+  const { x, y } = worldToScreen(wx, wy);
+  const sizePx = Math.max(16, sizeMeters * XY_SCALE_PX_PER_M);
+
+  xyCtx.save();
+  xyCtx.translate(x, y);
+  xyCtx.rotate(-yaw);
+  xyCtx.globalAlpha = 0.9;
+  xyCtx.beginPath();
+  xyCtx.moveTo(0, -sizePx * 0.6);
+  xyCtx.lineTo(sizePx * 0.4, sizePx * 0.5);
+  xyCtx.lineTo(-sizePx * 0.4, sizePx * 0.5);
+  xyCtx.closePath();
+  xyCtx.fillStyle = color;
+  xyCtx.fill();
+  xyCtx.lineWidth = 1.6;
+  xyCtx.strokeStyle = 'rgba(15, 23, 42, 0.75)';
+  xyCtx.stroke();
+  xyCtx.restore();
+}
+
+function worldToScreen(wx, wy) {
+  return {
+    x: xyOrigin.x + (wx * XY_SCALE_PX_PER_M),
+    y: xyOrigin.y - (wy * XY_SCALE_PX_PER_M)
+  };
+}
+
+function generatePoiColor(index) {
+  const hue = (index * 53) % 360;
+  return `hsl(${hue}, 82%, 64%)`;
+}
+
+function addPoi({ name, x, y, yaw }) {
+  ensureRos2dViewer();
+  const labelBase = typeof name === 'string' ? name.trim() : '';
+  const label = labelBase || `Punto ${xyPois.length + 1}`;
+  const valueX = Number.isFinite(x) ? x : 0;
+  const valueY = Number.isFinite(y) ? y : 0;
+  const hasYaw = Number.isFinite(yaw);
+  const poi = {
+    id: `poi-${Date.now()}-${xyPoiId++}`,
+    name: label,
+    x: valueX,
+    y: valueY,
+    yaw: hasYaw ? yaw : 0,
+    hasYaw,
+    color: generatePoiColor(xyPoiId)
+  };
+  xyPois = [...xyPois, poi];
+  refreshPoiList();
+  drawXYScene();
+}
+
+function removePoi(id) {
+  xyPois = xyPois.filter(poi => poi.id !== id);
+  refreshPoiList();
+  drawXYScene();
+}
+
+function refreshPoiList() {
+  if (!xyPoiList) return;
+  xyPoiList.innerHTML = '';
+
+  if (!xyPois.length) {
+    const empty = document.createElement('div');
+    empty.className = 'xy-poi-empty';
+    empty.textContent = 'Agrega puntos para destacarlos en el plano.';
+    xyPoiList.appendChild(empty);
+    return;
+  }
+
+  xyPois.forEach(poi => {
+    const item = document.createElement('div');
+    item.className = 'xy-poi-item';
+
+    const meta = document.createElement('div');
+    meta.className = 'xy-poi-meta';
+
+    const colorDot = document.createElement('span');
+    colorDot.className = 'xy-poi-color';
+    colorDot.style.background = poi.color;
+
+    const nameEl = document.createElement('strong');
+    nameEl.textContent = poi.name;
+
+    const coords = document.createElement('span');
+    coords.className = 'xy-poi-coords';
+    const yawText = poi.hasYaw ? ` · θ:${radToDeg(poi.yaw).toFixed(1)}°` : '';
+    coords.textContent = `x:${poi.x.toFixed(2)}m · y:${poi.y.toFixed(2)}m${yawText}`;
+
+    meta.appendChild(colorDot);
+    meta.appendChild(nameEl);
+    meta.appendChild(coords);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'xy-remove-btn';
+    removeBtn.textContent = 'Quitar';
+    removeBtn.addEventListener('click', () => removePoi(poi.id));
+
+    item.appendChild(meta);
+    item.appendChild(removeBtn);
+    xyPoiList.appendChild(item);
+  });
+}
+
+function updateXYRobotPose(x, y, yaw) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    clearXYRobotPose();
+    return;
+  }
+  xyPose = {
+    x,
+    y,
+    yaw: Number.isFinite(yaw) ? yaw : 0,
+    hasPose: true
+  };
+  if (xyUseCurrentBtn) {
+    xyUseCurrentBtn.disabled = false;
+  }
+  hideMapaPlaceholder();
+  drawXYScene();
+}
+
+function clearXYRobotPose() {
+  xyPose = { x: 0, y: 0, yaw: 0, hasPose: false };
+  if (xyUseCurrentBtn) {
+    xyUseCurrentBtn.disabled = true;
+  }
+  drawXYScene();
+}
+
+function degToRad(deg) {
+  return (deg * Math.PI) / 180;
+}
+
+function radToDeg(rad) {
+  return (rad * 180) / Math.PI;
 }
 
 function destroyRos2dViewer() {
-  if (ros2dPoseSub) {
-    ros2dPoseSub.unsubscribe();
-    ros2dPoseSub = null;
+  if (xyResizeObserver) {
+    xyResizeObserver.disconnect();
+    xyResizeObserver = null;
   }
-  if (ros2dGridClient) {
-    if (typeof ros2dGridClient.unsubscribe === 'function') {
-      ros2dGridClient.unsubscribe();
-    }
-    ros2dGridClient = null;
+  if (xyWindowResizeHandlerRegistered) {
+    window.removeEventListener('resize', resizeXYCanvas);
+    xyWindowResizeHandlerRegistered = false;
   }
-  if (ros2dViewer && ros2dViewer.scene) {
-    ros2dViewer.scene.removeAllChildren();
-  }
-  ros2dViewer = null;
-  ros2dRobotArrow = null;
-  if (ros2dResizeObserver && mapaCanvas) {
-    ros2dResizeObserver.disconnect();
-    ros2dResizeObserver = null;
-  }
-  if (mapaCanvas) {
-    mapaCanvas.innerHTML = '';
-  }
+  clearXYRobotPose();
 }
 
 function showSlamServiceFeedback(text, isError = false) {
@@ -592,6 +884,52 @@ const slamServiceButtons = document.querySelectorAll('.slam-action-btn[data-slam
 slamServiceButtons.forEach(btn => {
   btn.addEventListener('click', () => executeSlamServiceButton(btn));
 });
+
+if (xyPoiForm) {
+  xyPoiForm.addEventListener('submit', event => {
+    event.preventDefault();
+    const rawName = xyNameInput?.value ?? '';
+    const rawX = xyXInput ? Number.parseFloat(xyXInput.value) : 0;
+    const rawY = xyYInput ? Number.parseFloat(xyYInput.value) : 0;
+    const rawYaw = xyYawInput ? Number.parseFloat(xyYawInput.value) : NaN;
+
+    const xValue = Number.isFinite(rawX) ? rawX : 0;
+    const yValue = Number.isFinite(rawY) ? rawY : 0;
+    const yawRad = Number.isFinite(rawYaw) ? degToRad(rawYaw) : undefined;
+
+    addPoi({
+      name: rawName,
+      x: xValue,
+      y: yValue,
+      yaw: yawRad
+    });
+
+    if (xyNameInput) xyNameInput.value = '';
+    if (xyXInput) xyXInput.value = '0';
+    if (xyYInput) xyYInput.value = '0';
+    if (xyYawInput) xyYawInput.value = '0';
+  });
+}
+
+if (xyUseCurrentBtn) {
+  xyUseCurrentBtn.addEventListener('click', () => {
+    if (!xyPose.hasPose) return;
+    const timestamp = new Date().toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    addPoi({
+      name: `Pose ${timestamp}`,
+      x: xyPose.x,
+      y: xyPose.y,
+      yaw: xyPose.yaw
+    });
+  });
+  xyUseCurrentBtn.disabled = true;
+}
+
+refreshPoiList();
 
 // ========================
 // 5. Visualización de Nodos y Tópicos ROS

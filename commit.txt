@@ -1,8 +1,9 @@
-Añadí un interruptor de habilitación para que el control manual arranque desactivado y solo publique comandos cuando el usuario lo active.
+Implementé una vista XY manual para el mapa y herramientas para anotar poses:
 
-Web Development/prueba.html:321 Coloqué un bloque con el checkbox #control-enable y un mensaje de advertencia que obliga a armar el control antes de usar los mandos.
-Web Development/dashboard.js:527 Capturé el nuevo interruptor y añadí manualControlActivo() para centralizar la verificación de conexión + autorización manual.
-Web Development/dashboard.js:592 Ajusté el intervalo de publicación para que detenga el envío cuando el interruptor está apagado y actualice el estado mostrado.
-Web Development/dashboard.js:634 Reescribí actualizarEstadoControl para habilitar/deshabilitar controles según conexión y armado, actualizando los mensajes de estado.
-Web Development/dashboard.js:672 Modifiqué setTwist, los manejadores de botones y las teclas (Web Development/dashboard.js:708) para respetar el nuevo requisito y añadí un listener (Web Development/dashboard.js:685) que al desactivar envía un Twist de parada.
-Pruebas: no ejecuté pruebas automáticas; revisa en el navegador que el interruptor sea el único medio para habilitar los mandos y que al apagarlo se detenga el robot.
+Sustituí la integración ROS2D por un canvas propio que dibuja retícula, ejes y la flecha del robot, con redimensionamiento y actualización vía /pose (dashboard.js:229, dashboard.js:367, dashboard.js:546).
+
+Añadí formulario y listado de puntos de interés con colores, soporte para orientación opcional y botón “Usar pose actual” que captura la pose activa (prueba.html:458, dashboard.css:252, dashboard.js:472, dashboard.js:900).
+
+Ajusté el placeholder para que no bloquee la interacción y se oculte automáticamente al recibir datos o al añadir puntos (dashboard.js:151, dashboard.css:409).
+
+Tests: node --check dashboard.js
