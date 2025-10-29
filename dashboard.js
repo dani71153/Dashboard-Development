@@ -5,6 +5,14 @@ document.addEventListener('DOMContentLoaded', () => {
 const rosStatus   = document.getElementById('ros-status');
 const topicStatus = document.getElementById('topic-status');
 const datosRos    = document.getElementById('datos-ros');
+const slamStatusDot   = document.getElementById('slam-status-dot');
+const slamStatusText  = document.getElementById('slam-status-text');
+const slamLastUpdate  = document.getElementById('slam-last-update');
+
+const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
+let slamHeartbeatTimer = null;
+let slamMapMonitor = null;
+let slamPoseMonitor = null;
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -12,6 +20,93 @@ if (window.Chart && window['chartjsPluginAnnotation']) {
 
 if (rosStatus)   rosStatus.textContent = '🔴 Desconectado';
 if (topicStatus) topicStatus.textContent = '—';
+if (slamStatusDot) {
+  slamStatusDot.classList.remove('status-running', 'status-disconnected', 'status-idle');
+  slamStatusDot.classList.add('status-unknown');
+}
+if (slamStatusText) slamStatusText.textContent = 'SLAMToolbox: Sin datos';
+if (slamLastUpdate) slamLastUpdate.textContent = 'Última actualización: —';
+
+function setSlamIndicator(state, message) {
+  if (slamStatusDot) {
+    slamStatusDot.classList.remove('status-running', 'status-disconnected', 'status-idle', 'status-unknown');
+    let cssClass = 'status-unknown';
+    if (state === 'connected' || state === 'idle') {
+      cssClass = 'status-running';
+    } else if (state === 'disconnected') {
+      cssClass = 'status-disconnected';
+    }
+    slamStatusDot.classList.add(cssClass);
+  }
+  if (slamStatusText && typeof message === 'string') {
+    slamStatusText.textContent = message;
+  }
+}
+
+function setSlamLastUpdate(date) {
+  if (!slamLastUpdate) return;
+  if (!date) {
+    slamLastUpdate.textContent = 'Última actualización: —';
+    return;
+  }
+  const formato = date.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+  slamLastUpdate.textContent = `Última actualización: ${formato}`;
+}
+
+function markSlamHeartbeat(origen) {
+  setSlamIndicator('connected', `SLAMToolbox: Conectado (${origen})`);
+  setSlamLastUpdate(new Date());
+  if (slamHeartbeatTimer) clearTimeout(slamHeartbeatTimer);
+  slamHeartbeatTimer = setTimeout(() => {
+    setSlamIndicator('idle', 'SLAMToolbox: Conectado (sin datos recientes)');
+    setSlamLastUpdate(null);
+  }, SLAM_HEARTBEAT_TIMEOUT_MS);
+}
+
+function startSlamMonitoring() {
+  if (!window.ros || !window.ros.isConnected) return;
+  if (!slamMapMonitor) {
+    slamMapMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/map',
+      messageType: 'nav_msgs/OccupancyGrid',
+      queue_length: 1,
+      throttle_rate: 2000
+    });
+    slamMapMonitor.subscribe(() => markSlamHeartbeat('mapa'));
+  }
+  if (!slamPoseMonitor) {
+    slamPoseMonitor = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/pose',
+      messageType: 'geometry_msgs/PoseWithCovarianceStamped',
+      queue_length: 1,
+      throttle_rate: 1500
+    });
+    slamPoseMonitor.subscribe(() => markSlamHeartbeat('pose'));
+  }
+  setSlamIndicator('idle', 'SLAMToolbox: Conectado (esperando datos)');
+  setSlamLastUpdate(null);
+}
+
+function stopSlamMonitoring() {
+  if (slamHeartbeatTimer) {
+    clearTimeout(slamHeartbeatTimer);
+    slamHeartbeatTimer = null;
+  }
+  if (slamMapMonitor) {
+    slamMapMonitor.unsubscribe();
+    slamMapMonitor = null;
+  }
+  if (slamPoseMonitor) {
+    slamPoseMonitor.unsubscribe();
+    slamPoseMonitor = null;
+  }
+}
 
 // EXPONER la misma instancia al resto del dashboard
 window.ros = new ROSLIB.Ros({ url: 'ws://localhost:9090' });
@@ -21,16 +116,23 @@ const ros = window.ros;
 ros.on('connection', function () {
   if (rosStatus)   rosStatus.textContent   = '🟢 Conectado';
   if (topicStatus) topicStatus.textContent = '—';
+  startSlamMonitoring();
 });
 
 ros.on('close', function () {
   if (rosStatus)   rosStatus.textContent   = '🔴 Desconectado';
   if (topicStatus) topicStatus.textContent = '—';
+  stopSlamMonitoring();
+  setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
+  setSlamLastUpdate(null);
 });
 
 ros.on('error', function () {
   if (rosStatus)   rosStatus.textContent   = '⚠️ Error';
   if (topicStatus) topicStatus.textContent = '—';
+  stopSlamMonitoring();
+  setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
+  setSlamLastUpdate(null);
 });
 
 // (Opcional) Auto-reconexión simple

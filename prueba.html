@@ -412,7 +412,50 @@ les -->
     <h2>Visualización del Mapa</h2>
     <div id="slam-status">
       <span id="slam-status-dot" class="status-dot status-unknown"></span>
-      <span id="slam-status-text">SLAMToolbox: Sin datos</span>
+      <span>
+        <span id="slam-status-text">SLAMToolbox: Sin datos</span>
+        <span id="slam-last-update" style="display:block;color:#777;font-size:0.85em;">Última actualización: —</span>
+      </span>
+    </div>
+    <div class="slam-grid">
+      <div class="slam-column">
+        <div class="slam-card">
+          <h3>Tópicos publicados</h3>
+          <div class="slam-card-body">
+            <article class="slam-entry">
+              <header>
+                <h4>/map <small>(nav_msgs/OccupancyGrid)</small></h4>
+              </header>
+              <p>Mapa de ocupación global derivado del grafo de poses. Se muestra en el visor inferior.</p>
+              <button id="btn-request-dynamic-map" class="slam-action-btn">Solicitar snapshot vía /slam_toolbox/dynamic_map</button>
+              <pre id="slam-map-meta" class="slam-meta">Dimensiones: — · Resolución: — · Origen: —</pre>
+            </article>
+            <article class="slam-entry">
+              <header>
+                <h4>/pose <small>(geometry_msgs/PoseWithCovarianceStamped)</small></h4>
+              </header>
+              <p>Pose estimada del robot en el marco del mapa; útil para depuración y localización.</p>
+              <pre id="slam-pose-output" class="slam-meta">Sin datos</pre>
+            </article>
+          </div>
+        </div>
+      </div>
+      <div class="slam-column">
+        <div class="slam-card">
+          <h3>Servicios slam_toolbox</h3>
+          <div class="slam-card-body slam-services">
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/clear_changes" data-slam-type="slam_toolbox/Clear">Limpiar cambios pendientes</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/deserialize_map" data-slam-type="slam_toolbox/DeserializePoseGraph" data-requires-input="filename">Cargar mapa serializado</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/manual_loop_closure" data-slam-type="slam_toolbox/LoopClosure" data-requires-input="poses">Forzar loop closure manual</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/pause_new_measurements" data-slam-type="slam_toolbox/Pause">Pausar nuevas mediciones</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/save_map" data-slam-type="slam_toolbox/SaveMap" data-requires-input="output">Guardar mapa</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/serialize_map" data-slam-type="slam_toolbox/SerializePoseGraph" data-requires-input="target">Serializar mapa</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/toggle_interactive_mode" data-slam-type="slam_toolbox/ToggleInteractive">Alternar modo interactivo</button>
+            <button class="slam-action-btn" data-slam-service="/slam_toolbox/reset" data-slam-type="slam_toolbox/Reset">Reiniciar mapa</button>
+          </div>
+          <div id="slam-service-feedback" class="slam-meta" style="margin-top:0.5em;">Selecciona un servicio para ejecutarlo.</div>
+        </div>
+      </div>
     </div>
     <div id="mapa-canvas" style="width:100%;height:60vh;"></div> <!-- ← NUEVO -->
   </section>

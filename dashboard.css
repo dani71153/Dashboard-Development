@@ -130,6 +130,107 @@ nav a.active {
   font-size: 0.9rem;
 }
 
+.slam-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.slam-column {
+  flex: 1 1 320px;
+  display: flex;
+}
+
+.slam-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.slam-card h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.slam-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.slam-entry h4 {
+  margin: 0 0 0.35em 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.slam-entry h4 small {
+  font-size: 0.82em;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.slam-entry p {
+  margin: 0 0 0.6em 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.slam-action-btn {
+  align-self: flex-start;
+  padding: 0.6em 1.1em;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--primary-dark);
+  background: linear-gradient(135deg, var(--primary-color), #0ea5e9);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease, transform 0.1s ease;
+  color: var(--text-light);
+  box-shadow: 0 4px 10px rgba(33, 150, 243, 0.25);
+}
+
+.slam-action-btn:hover:not([disabled]) {
+  background: linear-gradient(135deg, var(--primary-dark), #0284c7);
+}
+
+.slam-action-btn:active:not([disabled]) {
+  transform: translateY(1px);
+}
+
+.slam-action-btn[disabled] {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.slam-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.slam-meta {
+  background: #111a28;
+  padding: 0.65em 0.9em;
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border: 1px solid rgba(255,255,255,0.07);
+  white-space: pre-wrap;
+}
+
 .status-dot {
   width: 14px;
   height: 14px;
