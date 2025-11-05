@@ -30,6 +30,7 @@ les -->
     </div>
     <ul>
       <li><a href="#graficas" data-tab="graficas">Gráficas</a></li>
+      <li><a href="#navegacion" data-tab="navegacion">Navegación</a></li>
       <li><a href="#nodos_topicos" data-tab="nodos">Nodos</a></li>
       <li><a href="#monitoreo" data-tab="monitoreo">Monitoreo</a></li> <!-- NUEVO -->
       <li><a href="#control" data-tab="control">Control</a></li>
@@ -377,6 +378,87 @@ les -->
       <div style="margin-top:1em; font-size:0.97em;">
         <b>Estado de publicación:</b>
         <span id="pub-status" style="color:#666;"></span>
+      </div>
+    </section>
+
+    <section id="navegacion" style="display:none;">
+      <h2>Monitoreo de Navegación</h2>
+      <div class="navx-layout">
+        <aside class="navx-sidebar">
+          <button class="navx-io-btn active" data-target="salidas">Salidas</button>
+          <button class="navx-io-btn" data-target="entradas">Entradas</button>
+        </aside>
+        <div class="navx-content">
+          <div id="nav-io-salidas" class="navx-panel" data-active>
+            <nav class="navx-salidas-tabs">
+              <button class="navx-tab-btn active" data-panel="velocidades">Velocidades</button>
+              <button class="navx-tab-btn" data-panel="frecuencia">Frecuencia</button>
+              <button class="navx-tab-btn" data-panel="aceleraciones">Aceleraciones</button>
+              <button class="navx-tab-btn" data-panel="consola">Consola</button>
+            </nav>
+            <div class="navx-panel-group">
+              <div id="nav-salidas-velocidades" class="navx-panel-item active">
+                <div class="navx-vel-mode">
+                  <button id="nav-vel-mode-linear" class="navx-vel-mode-btn active" type="button">Velocidad lineal</button>
+                  <button id="nav-vel-mode-angular" class="navx-vel-mode-btn" type="button">Velocidad angular</button>
+                </div>
+                <div class="navx-chart-grid navx-chart-grid-vel">
+                  <div class="navx-chart-card navx-chart-card-accent">
+                    <canvas id="nav-chart-cmd-vel-smoothed" width="460" height="240"></canvas>
+                    <div class="navx-chart-caption">/cmd_vel_smoothed</div>
+                  </div>
+                  <div class="navx-chart-card navx-chart-card-accent">
+                    <canvas id="nav-chart-diff-cmd-vel" width="460" height="240"></canvas>
+                    <div class="navx-chart-caption">/diff_drive_controller/cmd_vel</div>
+                  </div>
+                  <div class="navx-chart-card">
+                    <canvas id="nav-chart-cmd-vel" width="420" height="220"></canvas>
+                    <div class="navx-chart-caption">/cmd_vel</div>
+                  </div>
+                  <div class="navx-chart-card">
+                    <canvas id="nav-chart-cmd-vel-teleop" width="420" height="220"></canvas>
+                    <div class="navx-chart-caption">/cmd_vel_teleop</div>
+                  </div>
+                </div>
+              </div>
+              <div id="nav-salidas-frecuencia" class="navx-panel-item">
+                <div class="navx-chart-card navx-chart-card-wide">
+                  <canvas id="nav-chart-odom-timestamp" width="640" height="220"></canvas>
+                  <div class="navx-chart-caption">Δt entre mensajes de /odometry/filtered</div>
+                </div>
+                <p class="navx-panel-hint">Los puntos resaltados en rojo indican discontinuidades en el timestamp.</p>
+              </div>
+              <div id="nav-salidas-aceleraciones" class="navx-panel-item">
+                <div class="navx-chart-card navx-chart-card-wide">
+                  <canvas id="nav-chart-wheel-accel" width="640" height="220"></canvas>
+                  <div class="navx-chart-caption">Aceleración por rueda desde /joint_states</div>
+                </div>
+                <p class="navx-panel-hint">Se calcula como a = (velocidad_actual − velocidad_anterior) / Δt para cada rueda.</p>
+              </div>
+              <div id="nav-salidas-consola" class="navx-panel-item">
+                <div class="navx-console">
+                  <h3>Comandos ROS 2 para depuración</h3>
+                  <ul>
+                    <li><code>ros2 topic echo /cmd_vel</code></li>
+                    <li><code>ros2 topic echo /cmd_vel_smoothed</code></li>
+                    <li><code>ros2 topic echo /cmd_vel_teleop</code></li>
+                    <li><code>ros2 topic echo /diff_drive_controller/cmd_vel</code></li>
+                    <li><code>ros2 topic hz /odometry/filtered</code></li>
+                    <li><code>ros2 topic hz /cmd_vel</code></li>
+                    <li><code>ros2 topic hz /cmd_vel_smoothed</code></li>
+                    <li><code>ros2 topic echo /joint_states</code></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="nav-io-entradas" class="navx-panel" style="display:none;">
+            <div class="navx-empty">
+              <h3>Entradas</h3>
+              <p>Esta sección se conectará más adelante a los nodos de entrada. Por ahora permanece desconectada.</p>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
     

@@ -61,6 +61,19 @@ const calibOffsetThetaLabel = document.getElementById('calib-offset-theta-label'
 const calibEncodersStatusChip = document.getElementById('calib-encoders-status');
 const calibFilteredStatusChip = document.getElementById('calib-filtered-status');
 const calibImuStatusChip = document.getElementById('calib-imu-status');
+const navxSection = document.getElementById('navegacion');
+const navxAsideButtons = document.querySelectorAll('.navx-io-btn');
+const navxSalidasPanel = document.getElementById('nav-io-salidas');
+const navxEntradasPanel = document.getElementById('nav-io-entradas');
+const navxSalidasTabs = document.querySelectorAll('.navx-tab-btn');
+const navxPanelMap = {
+  velocidades: document.getElementById('nav-salidas-velocidades'),
+  frecuencia: document.getElementById('nav-salidas-frecuencia'),
+  aceleraciones: document.getElementById('nav-salidas-aceleraciones'),
+  consola: document.getElementById('nav-salidas-consola')
+};
+const navxVelModeLinearBtn = document.getElementById('nav-vel-mode-linear');
+const navxVelModeAngularBtn = document.getElementById('nav-vel-mode-angular');
 
 const SLAM_HEARTBEAT_TIMEOUT_MS = 6000;
 let slamHeartbeatTimer = null;
@@ -183,6 +196,106 @@ const calibStatus = {
   filtered: { el: calibFilteredStatusChip, timer: null },
   imu: { el: calibImuStatusChip, timer: null }
 };
+const NAVX_MAX_POINTS = 120;
+const NAVX_ODOM_MAX_POINTS = 180;
+const NAVX_ODOM_JUMP_THRESHOLD = 0.15;
+const NAVX_ACCEL_MAX_POINTS = 180;
+const NAVX_VEL_TOPIC_CONFIGS = [
+  {
+    key: 'cmdVel',
+    canvasId: 'nav-chart-cmd-vel',
+    topic: '/cmd_vel',
+    colorLinear: '#2563eb',
+    colorAngular: '#f97316',
+    typeHint: 'geometry_msgs/msg/Twist'
+  },
+  {
+    key: 'cmdVelSmoothed',
+    canvasId: 'nav-chart-cmd-vel-smoothed',
+    topic: '/cmd_vel_smoothed',
+    colorLinear: '#0ea5e9',
+    colorAngular: '#f97316',
+    typeHint: 'geometry_msgs/msg/TwistStamped'
+  },
+  {
+    key: 'cmdVelTeleop',
+    canvasId: 'nav-chart-cmd-vel-teleop',
+    topic: '/cmd_vel_teleop',
+    colorLinear: '#22c55e',
+    colorAngular: '#f97316',
+    typeHint: 'geometry_msgs/msg/TwistStamped'
+  },
+  {
+    key: 'diffCmdVel',
+    canvasId: 'nav-chart-diff-cmd-vel',
+    topic: '/diff_drive_controller/cmd_vel',
+    colorLinear: '#a855f7',
+    colorAngular: '#f97316',
+    typeHint: 'geometry_msgs/msg/TwistStamped'
+  }
+];
+const navxState = {
+  salidasActive: false,
+  activePanel: 'velocidades',
+  velocity: {
+    charts: {},
+    topics: {},
+    startTimes: {},
+    topicTypes: {},
+    mode: 'linear'
+  },
+  frequency: {
+    chart: null,
+    topic: null,
+    startStamp: null,
+    lastStamp: null
+  },
+  acceleration: {
+    chart: null,
+    topic: null,
+    startStamp: null,
+    lastStamp: null,
+    wheelNames: [],
+    wheelState: []
+  }
+};
+
+if (navxAsideButtons.length) {
+  navxAsideButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const target = button.dataset.target;
+      navxAsideButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+
+      if (navxSalidasPanel) navxSalidasPanel.style.display = target === 'salidas' ? 'flex' : 'none';
+      if (navxEntradasPanel) navxEntradasPanel.style.display = target === 'entradas' ? 'flex' : 'none';
+
+      updateNavegacionMonitoring();
+    });
+  });
+}
+
+if (navxSalidasTabs.length) {
+  navxSalidasTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const panel = tab.dataset.panel;
+      navxSalidasTabs.forEach(btn => btn.classList.remove('active'));
+      tab.classList.add('active');
+      Object.entries(navxPanelMap).forEach(([key, panelEl]) => {
+        if (!panelEl) return;
+        panelEl.classList.toggle('active', key === panel);
+      });
+      navxState.activePanel = panel;
+      updateNavPanelSubscriptions();
+    });
+  });
+}
+
+if (navxVelModeLinearBtn && navxVelModeAngularBtn) {
+  navxVelModeLinearBtn.addEventListener('click', () => navxSetVelocityMode('linear'));
+  navxVelModeAngularBtn.addEventListener('click', () => navxSetVelocityMode('angular'));
+  navxSetVelocityMode(navxState.velocity.mode);
+}
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
   Chart.register(window['chartjsPluginAnnotation']);
@@ -2356,6 +2469,7 @@ ros.on('connection', function () {
   startImuTempMonitoring();
   updateCalibracionMonitoring();
   updatePlanoMonitoring();
+  updateNavegacionMonitoring();
   if (activeTab === 'mapa') {
     ensureRos2dViewer();
   }
@@ -2369,6 +2483,7 @@ ros.on('close', function () {
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   stopPlanoMonitoring(true);
+  deactivateNavSalidas();
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -2383,6 +2498,7 @@ ros.on('error', function () {
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   stopPlanoMonitoring(true);
+  deactivateNavSalidas();
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
   destroyRos2dViewer();
@@ -2490,6 +2606,7 @@ function showTab(tabId) {
 
   updateCalibracionMonitoring();
   updatePlanoMonitoring();
+  updateNavegacionMonitoring();
 }
 
 function getTabFromHash() {
@@ -3176,6 +3293,11 @@ const nombresRuedas = [
   'joint_wheel_3',
   'joint_wheel_4'
 ];
+navxState.acceleration.wheelNames = nombresRuedas.slice();
+navxState.acceleration.wheelState = nombresRuedas.map(() => ({
+  lastLinearVel: null,
+  lastPos: null
+}));
 const chartsRuedas = [];
 let tiempoInicioOdo = null;
 let jointStatesListenerOdo = null;
@@ -4422,6 +4544,569 @@ const divGraficasEncoders = document.getElementById('graficas-encoders');
 const divGraficasMotores = document.getElementById('graficas-motores');
 const divGraficasUnicas = document.getElementById('graficas-unicas');
 const divGraficasMPU = document.getElementById('graficas-mpu');  // << NUEVO
+
+function updateNavegacionMonitoring() {
+  if (!navxAsideButtons || navxAsideButtons.length === 0) {
+    deactivateNavSalidas();
+    return;
+  }
+  const salidasSelected = Array.from(navxAsideButtons).some(btn =>
+    btn.dataset.target === 'salidas' && btn.classList.contains('active')
+  );
+  if (activeTab === 'navegacion' && salidasSelected) {
+    activateNavSalidas();
+  } else {
+    deactivateNavSalidas();
+  }
+  updateNavPanelSubscriptions();
+}
+
+function activateNavSalidas() {
+  if (navxState.salidasActive) return;
+  navxState.salidasActive = true;
+  updateNavPanelSubscriptions();
+}
+
+function deactivateNavSalidas() {
+  if (!navxState.salidasActive) return;
+  navxState.salidasActive = false;
+  updateNavPanelSubscriptions();
+}
+
+function updateNavPanelSubscriptions() {
+  if (!navxState.salidasActive) {
+    stopNavVelocityMonitoring();
+    stopNavFrequencyMonitoring();
+    stopNavAccelerationMonitoring();
+    return;
+  }
+
+  const panel = navxState.activePanel;
+
+  if (panel === 'velocidades') {
+    startNavVelocityMonitoring();
+    stopNavFrequencyMonitoring();
+    stopNavAccelerationMonitoring();
+  } else if (panel === 'frecuencia') {
+    stopNavVelocityMonitoring();
+    startNavFrequencyMonitoring();
+    stopNavAccelerationMonitoring();
+  } else if (panel === 'aceleraciones') {
+    stopNavVelocityMonitoring();
+    stopNavFrequencyMonitoring();
+    startNavAccelerationMonitoring();
+  } else {
+    stopNavVelocityMonitoring();
+    stopNavFrequencyMonitoring();
+    stopNavAccelerationMonitoring();
+  }
+}
+
+function startNavVelocityMonitoring() {
+  if (!ros || !ros.isConnected || navxState.activePanel !== 'velocidades') return;
+  NAVX_VEL_TOPIC_CONFIGS.forEach(config => {
+    const chart = ensureNavVelocityChart(config);
+    if (!chart) return;
+    resolveNavVelocityType(config, resolvedType => {
+      if (!navxState.salidasActive || navxState.activePanel !== 'velocidades') return;
+      const normalized = navxNormalizeTwistType(resolvedType);
+      if (navxState.velocity.topics[config.key] && navxState.velocity.topicTypes[config.key] === normalized) {
+        return;
+      }
+      subscribeNavVelocityTopic(config, normalized);
+    });
+  });
+}
+
+function stopNavVelocityMonitoring() {
+  Object.values(navxState.velocity.topics).forEach(topic => {
+    if (topic) topic.unsubscribe();
+  });
+  navxState.velocity.topics = {};
+  navxState.velocity.startTimes = {};
+  Object.values(navxState.velocity.charts).forEach(chart => navxClearChart(chart));
+}
+
+function subscribeNavVelocityTopic(config, rawType) {
+  if (!ros || !navxState.salidasActive) return;
+  if (navxState.velocity.topics[config.key]) {
+    navxState.velocity.topics[config.key].unsubscribe();
+  }
+  const resolvedType = navxNormalizeTwistType(rawType);
+  const topic = new ROSLIB.Topic({
+    ros,
+    name: config.topic,
+    messageType: resolvedType
+  });
+  topic.subscribe(msg => handleNavVelocityMessage(config, msg));
+  navxState.velocity.topics[config.key] = topic;
+  navxState.velocity.topicTypes[config.key] = resolvedType;
+  navxState.velocity.startTimes[config.key] = null;
+}
+
+function navxNormalizeTwistType(type) {
+  if (typeof type !== 'string') {
+    return 'geometry_msgs/msg/Twist';
+  }
+  const lower = type.trim().toLowerCase();
+  if (lower.includes('twiststamped')) {
+    return 'geometry_msgs/msg/TwistStamped';
+  }
+  if (lower.includes('twist')) {
+    return 'geometry_msgs/msg/Twist';
+  }
+  return 'geometry_msgs/msg/Twist';
+}
+
+function navxSetVelocityMode(mode) {
+  const normalizedMode = mode === 'angular' ? 'angular' : 'linear';
+  navxState.velocity.mode = normalizedMode;
+  navxUpdateVelocityModeButtons();
+  navxApplyVelocityModeToCharts();
+}
+
+function navxUpdateVelocityModeButtons() {
+  if (navxVelModeLinearBtn) {
+    navxVelModeLinearBtn.classList.toggle('active', navxState.velocity.mode === 'linear');
+  }
+  if (navxVelModeAngularBtn) {
+    navxVelModeAngularBtn.classList.toggle('active', navxState.velocity.mode === 'angular');
+  }
+}
+
+function navxApplyVelocityModeToCharts() {
+  Object.values(navxState.velocity.charts).forEach(chart => {
+    navxApplyVelocityModeToChart(chart, true);
+    chart.update();
+  });
+}
+
+function navxApplyVelocityModeToChart(chart, suppressUpdate = false) {
+  if (!chart) return;
+  const isLinearMode = navxState.velocity.mode === 'linear';
+  chart.data.datasets.forEach((dataset, idx) => {
+    const isLinearDataset = idx === 0;
+    dataset.hidden = isLinearMode ? !isLinearDataset : isLinearDataset;
+  });
+  if (!suppressUpdate) {
+    chart.update();
+  }
+}
+
+function resolveNavVelocityType(config, callback) {
+  const hintType = navxNormalizeTwistType(config.typeHint);
+  if (!ros) {
+    callback(hintType);
+    return;
+  }
+
+  const cached = navxState.velocity.topicTypes[config.key];
+  if (cached) {
+    callback(cached);
+    return;
+  }
+
+  if (typeof ros.getTopics === 'function') {
+    ros.getTopics(result => {
+      const topics = Array.isArray(result?.topics) ? result.topics : [];
+      const types = Array.isArray(result?.types) ? result.types : [];
+      const idx = topics.indexOf(config.topic);
+      if (idx >= 0 && types[idx]) {
+        callback(navxNormalizeTwistType(types[idx]));
+      } else {
+        resolveNavVelocityTypeByLookup(config, hintType, callback);
+      }
+    }, () => resolveNavVelocityTypeByLookup(config, hintType, callback));
+    return;
+  }
+
+  resolveNavVelocityTypeByLookup(config, hintType, callback);
+}
+
+function resolveNavVelocityTypeByLookup(config, fallbackType, callback) {
+  if (!ros || typeof ros.getTopicsForType !== 'function') {
+    callback(fallbackType);
+    return;
+  }
+
+  const preferred = navxNormalizeTwistType(fallbackType);
+  const alternatives = preferred === 'geometry_msgs/msg/TwistStamped'
+    ? ['geometry_msgs/msg/TwistStamped', 'geometry_msgs/msg/Twist']
+    : ['geometry_msgs/msg/Twist', 'geometry_msgs/msg/TwistStamped'];
+
+  const uniqueTypes = Array.from(new Set(alternatives));
+
+  const tryResolve = index => {
+    if (index >= uniqueTypes.length) {
+      callback(fallbackType);
+      return;
+    }
+    const type = uniqueTypes[index];
+    ros.getTopicsForType(type, topics => {
+      const list = Array.isArray(topics?.topics) ? topics.topics : Array.isArray(topics) ? topics : [];
+      if (list.includes(config.topic)) {
+        callback(type);
+      } else {
+        tryResolve(index + 1);
+      }
+    }, () => tryResolve(index + 1));
+  };
+
+  tryResolve(0);
+}
+
+function ensureNavVelocityChart(config) {
+  if (navxState.velocity.charts[config.key]) {
+    return navxState.velocity.charts[config.key];
+  }
+  const canvas = document.getElementById(config.canvasId);
+  if (!canvas || !window.Chart) return null;
+  const chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Lineal X (m/s)',
+          data: [],
+          borderColor: config.colorLinear,
+          borderWidth: 2,
+          pointRadius: 1,
+          tension: 0.1,
+          yAxisID: 'linear'
+        },
+        {
+          label: 'Angular Z (rad/s)',
+          data: [],
+          borderColor: config.colorAngular,
+          borderWidth: 2,
+          borderDash: [6, 2],
+          pointRadius: 1,
+          tension: 0.1,
+          yAxisID: 'angular'
+        }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Tiempo (s)' }
+        },
+        linear: {
+          position: 'left',
+          title: { display: true, text: 'Lineal (m/s)' }
+        },
+        angular: {
+          position: 'right',
+          title: { display: true, text: 'Angular (rad/s)' },
+          grid: { drawOnChartArea: false }
+        }
+      },
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+  navxState.velocity.charts[config.key] = chart;
+  navxApplyVelocityModeToChart(chart, true);
+  chart.update();
+  return chart;
+}
+
+function handleNavVelocityMessage(config, msg) {
+  const chart = ensureNavVelocityChart(config);
+  if (!chart) return;
+  const now = Date.now();
+  if (!navxState.velocity.startTimes[config.key]) {
+    navxState.velocity.startTimes[config.key] = now;
+  }
+  const elapsed = (now - navxState.velocity.startTimes[config.key]) / 1000;
+  const twist = navxExtractTwistFromMessage(navxState.velocity.topicTypes[config.key], msg);
+  const linearX = twist && twist.linear && Number.isFinite(twist.linear.x) ? twist.linear.x : null;
+  const angularZ = twist && twist.angular && Number.isFinite(twist.angular.z) ? twist.angular.z : null;
+  navxAppendData(chart, Number(elapsed.toFixed(2)), [linearX, angularZ], NAVX_MAX_POINTS);
+}
+
+function startNavFrequencyMonitoring() {
+  if (!ros || !ros.isConnected || !navxState.salidasActive || navxState.activePanel !== 'frecuencia') return;
+  const chart = ensureNavFrequencyChart();
+  if (!chart || navxState.frequency.topic) return;
+  navxState.frequency.topic = new ROSLIB.Topic({
+    ros,
+    name: '/odometry/filtered',
+    messageType: 'nav_msgs/Odometry'
+  });
+  navxState.frequency.topic.subscribe(handleNavFrequencyMessage);
+}
+
+function stopNavFrequencyMonitoring() {
+  if (navxState.frequency.topic) {
+    navxState.frequency.topic.unsubscribe();
+  }
+  navxState.frequency.topic = null;
+  navxState.frequency.startStamp = null;
+  navxState.frequency.lastStamp = null;
+  navxClearChart(navxState.frequency.chart);
+}
+
+function ensureNavFrequencyChart() {
+  if (navxState.frequency.chart) return navxState.frequency.chart;
+  const canvas = document.getElementById('nav-chart-odom-timestamp');
+  if (!canvas || !window.Chart) return null;
+  navxState.frequency.chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Δt (s)',
+          data: [],
+          borderColor: '#0ea5e9',
+          borderWidth: 2,
+          pointRadius: 1.5,
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Discontinuidad',
+          data: [],
+          borderColor: '#ef4444',
+          backgroundColor: '#ef4444',
+          pointRadius: 4,
+          showLine: false
+        }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Tiempo (s)' } },
+        y: {
+          title: { display: true, text: 'Δt (s)' },
+          beginAtZero: true
+        }
+      },
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+  return navxState.frequency.chart;
+}
+
+function handleNavFrequencyMessage(msg) {
+  const chart = ensureNavFrequencyChart();
+  if (!chart) return;
+  const stampSec = navxStampToSeconds(msg && msg.header ? msg.header.stamp : null);
+  if (!Number.isFinite(stampSec)) return;
+  if (navxState.frequency.startStamp === null) {
+    navxState.frequency.startStamp = stampSec;
+  }
+  const dtRaw = navxState.frequency.lastStamp !== null ? stampSec - navxState.frequency.lastStamp : 0;
+  const dt = Number.isFinite(dtRaw) ? dtRaw : 0;
+  navxState.frequency.lastStamp = stampSec;
+  const elapsed = stampSec - (navxState.frequency.startStamp ?? stampSec);
+  const isJump = dt > NAVX_ODOM_JUMP_THRESHOLD;
+  navxAppendData(
+    chart,
+    Number(elapsed.toFixed(2)),
+    [dt, isJump ? dt : null],
+    NAVX_ODOM_MAX_POINTS
+  );
+}
+
+function startNavAccelerationMonitoring() {
+  if (!ros || !ros.isConnected || !navxState.salidasActive || navxState.activePanel !== 'aceleraciones') return;
+  const chart = ensureNavAccelerationChart();
+  if (!chart || navxState.acceleration.topic) return;
+  navxState.acceleration.topic = new ROSLIB.Topic({
+    ros,
+    name: '/joint_states',
+    messageType: 'sensor_msgs/JointState'
+  });
+  navxState.acceleration.topic.subscribe(handleNavAccelerationMessage);
+}
+
+function stopNavAccelerationMonitoring() {
+  if (navxState.acceleration.topic) {
+    navxState.acceleration.topic.unsubscribe();
+  }
+  navxState.acceleration.topic = null;
+  navxState.acceleration.startStamp = null;
+  navxState.acceleration.lastStamp = null;
+  navxState.acceleration.wheelState = navxState.acceleration.wheelNames.map(() => ({
+    lastLinearVel: null,
+    lastPos: null
+  }));
+  navxClearChart(navxState.acceleration.chart);
+}
+
+function ensureNavAccelerationChart() {
+  if (navxState.acceleration.chart) return navxState.acceleration.chart;
+  if (!navxState.acceleration.wheelNames.length) return null;
+  const canvas = document.getElementById('nav-chart-wheel-accel');
+  if (!canvas || !window.Chart) return null;
+  const palette = ['#2563eb', '#22c55e', '#f97316', '#a855f7', '#6366f1', '#10b981'];
+  navxState.acceleration.chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: navxState.acceleration.wheelNames.map((wheel, idx) => ({
+        label: wheel,
+        data: [],
+        borderColor: palette[idx % palette.length],
+        borderWidth: 2,
+        pointRadius: 1,
+        tension: 0.12,
+        spanGaps: true
+      }))
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Tiempo (s)' } },
+        y: { title: { display: true, text: 'Aceleración (m/s²)' } }
+      },
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+  return navxState.acceleration.chart;
+}
+
+function handleNavAccelerationMessage(msg) {
+  const chart = ensureNavAccelerationChart();
+  if (!chart) return;
+  const stampSec = navxStampToSeconds(msg && msg.header ? msg.header.stamp : null) ?? (Date.now() / 1000);
+  if (!Number.isFinite(stampSec)) return;
+  if (navxState.acceleration.startStamp === null) {
+    navxState.acceleration.startStamp = stampSec;
+  }
+
+  if (navxState.acceleration.lastStamp === null) {
+    navxState.acceleration.lastStamp = stampSec;
+    primeNavAccelerationState(msg);
+    return;
+  }
+
+  const dt = stampSec - navxState.acceleration.lastStamp;
+  navxState.acceleration.lastStamp = stampSec;
+
+  if (!Number.isFinite(dt) || dt <= 0) {
+    primeNavAccelerationState(msg);
+    return;
+  }
+
+  const elapsed = stampSec - navxState.acceleration.startStamp;
+  const accValues = navxState.acceleration.wheelNames.map((wheel, idx) => {
+    const wheelIdx = Array.isArray(msg.name) ? msg.name.indexOf(wheel) : -1;
+    if (wheelIdx < 0) return null;
+
+    const state = navxState.acceleration.wheelState[idx];
+    if (!state) return null;
+
+    let currentVelLinear = null;
+    if (Array.isArray(msg.velocity) && Number.isFinite(msg.velocity[wheelIdx])) {
+      currentVelLinear = msg.velocity[wheelIdx] * RADIO_RUEDA;
+    }
+
+    const hasPosition = Array.isArray(msg.position) && Number.isFinite(msg.position[wheelIdx]);
+    const currentPos = hasPosition ? msg.position[wheelIdx] : null;
+
+    if (currentVelLinear === null && hasPosition) {
+      if (state.lastPos !== null) {
+        const velFromPos = (currentPos - state.lastPos) / dt;
+        currentVelLinear = velFromPos * RADIO_RUEDA;
+      }
+    }
+
+    if (hasPosition) {
+      state.lastPos = currentPos;
+    }
+
+    if (currentVelLinear === null) {
+      return null;
+    }
+
+    let accel = null;
+    if (state.lastLinearVel !== null) {
+      accel = (currentVelLinear - state.lastLinearVel) / dt;
+    }
+    state.lastLinearVel = currentVelLinear;
+
+    return Number.isFinite(accel) ? accel : null;
+  });
+
+  if (!accValues.some(val => val !== null && Number.isFinite(val))) {
+    return;
+  }
+
+  navxAppendData(chart, Number(elapsed.toFixed(2)), accValues, NAVX_ACCEL_MAX_POINTS);
+}
+
+function primeNavAccelerationState(msg) {
+  const names = Array.isArray(msg.name) ? msg.name : [];
+  navxState.acceleration.wheelNames.forEach((wheel, idx) => {
+    const wheelIdx = names.indexOf(wheel);
+    if (wheelIdx < 0) return;
+    const state = navxState.acceleration.wheelState[idx];
+    if (!state) return;
+    if (Array.isArray(msg.velocity) && Number.isFinite(msg.velocity[wheelIdx])) {
+      state.lastLinearVel = msg.velocity[wheelIdx] * RADIO_RUEDA;
+    }
+    if (Array.isArray(msg.position) && Number.isFinite(msg.position[wheelIdx])) {
+      state.lastPos = msg.position[wheelIdx];
+    }
+  });
+}
+
+function navxAppendData(chart, label, values, limit) {
+  if (!chart) return;
+  chart.data.labels.push(label);
+  chart.data.datasets.forEach((dataset, idx) => {
+    dataset.data.push(values[idx] ?? null);
+  });
+  if (chart.data.labels.length > limit) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(dataset => dataset.data.shift());
+  }
+  chart.update();
+}
+
+function navxClearChart(chart) {
+  if (!chart) return;
+  chart.data.labels.length = 0;
+  chart.data.datasets.forEach(dataset => {
+    dataset.data.length = 0;
+  });
+  chart.update();
+}
+
+function navxStampToSeconds(stamp) {
+  if (!stamp) return null;
+  const sec = Number(stamp.sec ?? stamp.secs ?? 0);
+  const nanosec = Number(stamp.nanosec ?? stamp.nsecs ?? 0);
+  if (!Number.isFinite(sec) || !Number.isFinite(nanosec)) return null;
+  return sec + nanosec / 1e9;
+}
+
+function navxExtractTwistFromMessage(topicType, message) {
+  if (!message) return null;
+  const type = typeof topicType === 'string' ? topicType.toLowerCase() : '';
+  if (type.includes('twiststamped')) {
+    return message.twist ?? null;
+  }
+  if (!message.linear && message.twist) {
+    return message.twist;
+  }
+  return message;
+}
 
 if (botonesGraficas.length > 0) {
   botonesGraficas.forEach(boton => {

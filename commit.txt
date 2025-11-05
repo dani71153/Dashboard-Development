@@ -1,7 +1,14 @@
-Sumé zoom y paneo al plano XY: ahora puedes acercar/alejar con los botones o la rueda del mouse, arrastrar para mover la vista y usar WASD para desplazarla; todo recalcula la cuadrícula y mantiene los landmarks visibles. También se actualizó la inicialización para registrar los gestos y resetear la vista/offset al desconectarse.
+feat(ui-navigation): agrega pestaña “Navegación” con panel “Salidas”, grid 2×2 y subscripciones inteligentes
 
-Cambios clave:
-
-prueba.html:389-390 añade los botones de zoom y la nota de interacción.
-dashboard.css:228-307 incorpora estilos para los controles y estados deshabilitados.
-dashboard.js:23-1579 introduce estado de zoom/pan, eventos de rueda y arrastre, cálculo inverso pantalla→mundo y ajustes en el render y telemetría.
+- Nueva pestaña Navegación tomando como referencia la pestaña Gráficas.
+- Aside con Entradas/Salidas (implementado: Salidas).
+- Panel de Velocidades con 4 gráficas en grid 2×2 y tamaño limitado:
+  /cmd_vel, /cmd_vel_smoothed, /cmd_vel_teleop, /diff_drive_controller/cmd_vel
+- /cmd_vel_smoothed y /diff_drive_controller/cmd_vel ubicadas juntas.
+- Toggle Lineal/Angular para mostrar solo linear.x o angular.z.
+- Gráfica de continuidad usando timestamp de /odometry/filtered.
+- Gráfica de aceleración por rueda usando /joint_states.
+- Consola de depuración con comandos ros2 topic echo/hz.
+- Suscripciones se activan solo cuando la pestaña “Navegación” y el subpanel están visibles.
+- Detección automática Twist/TwistStamped para evitar rechazos en rosbridge.
+- No se publica nada desde el dashboard, solo subscribe.
