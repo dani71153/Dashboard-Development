@@ -72,6 +72,8 @@ const navxPanelMap = {
   aceleraciones: document.getElementById('nav-salidas-aceleraciones'),
   consola: document.getElementById('nav-salidas-consola')
 };
+const navxAccelToggleHighBtn = document.getElementById('nav-accel-toggle-high');
+const navxFreqToggleBtn = document.getElementById('nav-freq-toggle-mode');
 const navxVelModeLinearBtn = document.getElementById('nav-vel-mode-linear');
 const navxVelModeAngularBtn = document.getElementById('nav-vel-mode-angular');
 
@@ -248,7 +250,9 @@ const navxState = {
     chart: null,
     topic: null,
     startStamp: null,
-    lastStamp: null
+    lastStamp: null,
+    mode: 'delta', // 'delta' (segundos) o 'hz'
+    history: []
   },
   acceleration: {
     charts: {},
@@ -256,7 +260,8 @@ const navxState = {
     startStamp: null,
     lastStamp: null,
     wheelNames: [],
-    wheelState: []
+    wheelState: [],
+    highWheelsEnabled: true
   }
 };
 
@@ -295,6 +300,22 @@ if (navxVelModeLinearBtn && navxVelModeAngularBtn) {
   navxVelModeLinearBtn.addEventListener('click', () => navxSetVelocityMode('linear'));
   navxVelModeAngularBtn.addEventListener('click', () => navxSetVelocityMode('angular'));
   navxSetVelocityMode(navxState.velocity.mode);
+}
+
+if (navxFreqToggleBtn) {
+  navxFreqToggleBtn.addEventListener('click', () => {
+    navxState.frequency.mode = navxState.frequency.mode === 'delta' ? 'hz' : 'delta';
+    navxApplyFrequencyMode();
+  });
+  navxApplyFrequencyMode();
+}
+
+if (navxAccelToggleHighBtn) {
+  navxAccelToggleHighBtn.addEventListener('click', () => {
+    navxState.acceleration.highWheelsEnabled = !navxState.acceleration.highWheelsEnabled;
+    navxApplyAccelerationVisibility();
+  });
+  navxApplyAccelerationVisibility();
 }
 
 if (window.Chart && window['chartjsPluginAnnotation']) {
@@ -4595,6 +4616,7 @@ function updateNavPanelSubscriptions() {
     stopNavVelocityMonitoring();
     stopNavFrequencyMonitoring();
     startNavAccelerationMonitoring();
+    navxApplyAccelerationVisibility();
   } else {
     stopNavVelocityMonitoring();
     stopNavFrequencyMonitoring();
@@ -4690,6 +4712,64 @@ function navxApplyVelocityModeToChart(chart, suppressUpdate = false) {
   });
   if (!suppressUpdate) {
     chart.update();
+  }
+}
+
+function navxApplyFrequencyMode() {
+  if (navxFreqToggleBtn) {
+    navxFreqToggleBtn.textContent = navxState.frequency.mode === 'delta'
+      ? 'Mostrar en Hz'
+      : 'Mostrar en segundos';
+  }
+  const mode = navxState.frequency.mode;
+  const chart = navxState.frequency.chart;
+  if (!chart) return;
+  chart.data.datasets[0].label = mode === 'delta' ? 'Δt (s)' : 'Frecuencia (Hz)';
+  chart.data.datasets[1].label = mode === 'delta' ? 'Discontinuidad' : 'Caída de Hz';
+  chart.options.scales.y.title.text = mode === 'delta' ? 'Δt (s)' : 'Frecuencia (Hz)';
+  navxRenderFrequencyChart();
+}
+
+function navxConvertFrequencyValue(mode, dt) {
+  if (!Number.isFinite(dt) || dt <= 0) return null;
+  return mode === 'hz' ? 1 / dt : dt;
+}
+
+function navxRenderFrequencyChart() {
+  const chart = navxState.frequency.chart;
+  if (!chart) return;
+  const mode = navxState.frequency.mode;
+  const history = navxState.frequency.history;
+  chart.data.labels = history.map(entry => entry.x);
+  chart.data.datasets[0].data = history.map(entry => ({
+    x: entry.x,
+    y: navxConvertFrequencyValue(mode, entry.dt)
+  }));
+  chart.data.datasets[1].data = history.map(entry => ({
+    x: entry.x,
+    y: entry.jump ? navxConvertFrequencyValue(mode, entry.dt) : null
+  }));
+  chart.update();
+}
+
+function navxApplyAccelerationVisibility() {
+  const enabled = navxState.acceleration.highWheelsEnabled;
+  if (navxAccelToggleHighBtn) {
+    navxAccelToggleHighBtn.textContent = enabled ? 'Ocultar ruedas 3 y 4' : 'Mostrar ruedas 3 y 4';
+  }
+  const card3 = document.getElementById('nav-accel-card-3');
+  const card4 = document.getElementById('nav-accel-card-4');
+  if (card3) card3.style.display = enabled ? '' : 'none';
+  if (card4) card4.style.display = enabled ? '' : 'none';
+  if (!enabled) {
+    [2, 3].forEach(idx => {
+      const chart = navxState.acceleration.charts[idx];
+      if (chart) navxClearChart(chart);
+    });
+  } else if (navxState.salidasActive && navxState.activePanel === 'aceleraciones') {
+    navxState.acceleration.wheelNames.forEach((_, idx) => {
+      if (idx >= 2) ensureNavAccelerationChart(idx);
+    });
   }
 }
 
@@ -4849,6 +4929,7 @@ function stopNavFrequencyMonitoring() {
   navxState.frequency.topic = null;
   navxState.frequency.startStamp = null;
   navxState.frequency.lastStamp = null;
+  navxState.frequency.history = [];
   navxClearChart(navxState.frequency.chart);
 }
 
@@ -4895,6 +4976,7 @@ function ensureNavFrequencyChart() {
       }
     }
   });
+  navxApplyFrequencyMode();
   return navxState.frequency.chart;
 }
 
@@ -4911,18 +4993,25 @@ function handleNavFrequencyMessage(msg) {
   navxState.frequency.lastStamp = stampSec;
   const elapsed = stampSec - (navxState.frequency.startStamp ?? stampSec);
   const isJump = dt > NAVX_ODOM_JUMP_THRESHOLD;
-  navxAppendData(
-    chart,
-    Number(elapsed.toFixed(2)),
-    [dt, isJump ? dt : null],
-    NAVX_ODOM_MAX_POINTS
-  );
+  const point = {
+    x: Number(elapsed.toFixed(2)),
+    dt,
+    jump: isJump
+  };
+  navxState.frequency.history.push(point);
+  if (navxState.frequency.history.length > NAVX_ODOM_MAX_POINTS) {
+    navxState.frequency.history = navxState.frequency.history.slice(-NAVX_ODOM_MAX_POINTS);
+  }
+  navxRenderFrequencyChart();
 }
 
 function startNavAccelerationMonitoring() {
   if (!ros || !ros.isConnected || !navxState.salidasActive || navxState.activePanel !== 'aceleraciones') return;
   if (!navxState.acceleration.wheelNames.length) return;
-  navxState.acceleration.wheelNames.forEach((_, idx) => ensureNavAccelerationChart(idx));
+  navxState.acceleration.wheelNames.forEach((_, idx) => {
+    if (!navxState.acceleration.highWheelsEnabled && idx >= 2) return;
+    ensureNavAccelerationChart(idx);
+  });
   if (navxState.acceleration.topic) return;
   navxState.acceleration.topic = new ROSLIB.Topic({
     ros,
@@ -5054,6 +5143,9 @@ function handleNavAccelerationMessage(msg) {
     const chart = ensureNavAccelerationChart(idx);
     if (!chart) return;
     const value = accValues[idx];
+    if (!navxState.acceleration.highWheelsEnabled && idx >= 2) {
+      return;
+    }
     navxAppendData(chart, elapsed, [Number.isFinite(value) ? value : null], NAVX_ACCEL_MAX_POINTS);
   });
 }

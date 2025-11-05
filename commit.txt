@@ -1,9 +1,10 @@
-feat(acceleration): grid 2×2 y canvas individual por rueda
+feat(freq-toggle): agrega selector Hz/seg en pestaña Frecuencia
 
-- Ajusta sección de aceleraciones a un grid 2×2 con cuatro canvas separados
-  (ruedas 1–4), manteniendo el orden de leyenda solicitado.
-- prueba.html (line 405): nueva estructura de tarjetas y canvas por rueda.
-- dashboard.js (line 237): almacena charts por rueda en el estado de navegación.
-- dashboard.js (line 4922–5042): crea/limpia cada Chart individual, calcula
-  aceleración por rueda ((vel_actual – vel_previa) / dt) y actualiza datasets.
-- Pruebas con: node -e "new Function(require('fs').readFileSync('dashboard.js','utf8'))"
+- prueba.html (line 418): añade botón “Mostrar en Hz / Mostrar en segundos”
+  sobre la gráfica de /odometry/filtered.
+- dashboard.css (line 323): reutiliza estilos de toggles para separación y tamaño.
+- dashboard.js (line 60, 237, 465): extiende estado de Navegación con historial
+  de Δt y modo de visualización.
+- dashboard.js (line 487, 490, 530, 539): recalcula dataset en tiempo real según
+  Hz o segundos y limpia datos al detener suscripción.
+- Mantiene marcadores de discontinuidad en rojo.

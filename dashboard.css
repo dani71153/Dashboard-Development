@@ -331,6 +331,11 @@ nav a.active {
   transition: var(--transition);
 }
 
+.navx-panel-item #nav-accel-toggle-high,
+.navx-panel-item #nav-freq-toggle-mode {
+  margin-bottom: var(--spacing-md);
+}
+
 .navx-vel-mode-btn:hover {
   background: var(--primary-light);
   border-color: var(--primary-color);

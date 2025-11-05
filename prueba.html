@@ -422,6 +422,7 @@ les -->
                 </div>
               </div>
               <div id="nav-salidas-frecuencia" class="navx-panel-item">
+                <button id="nav-freq-toggle-mode" class="navx-vel-mode-btn" type="button">Mostrar en Hz</button>
                 <div class="navx-chart-card navx-chart-card-wide">
                   <canvas id="nav-chart-odom-timestamp" width="640" height="220"></canvas>
                   <div class="navx-chart-caption">Δt entre mensajes de /odometry/filtered</div>
@@ -429,20 +430,21 @@ les -->
                 <p class="navx-panel-hint">Los puntos resaltados en rojo indican discontinuidades en el timestamp.</p>
               </div>
               <div id="nav-salidas-aceleraciones" class="navx-panel-item">
+                <button id="nav-accel-toggle-high" class="navx-vel-mode-btn" type="button">Ocultar ruedas 3 y 4</button>
                 <div class="navx-chart-grid navx-chart-grid-vel">
-                  <div class="navx-chart-card">
+                  <div class="navx-chart-card" id="nav-accel-card-1">
                     <canvas id="nav-chart-wheel-accel-1" width="420" height="220"></canvas>
                     <div class="navx-chart-caption">Rueda 1</div>
                   </div>
-                  <div class="navx-chart-card">
+                  <div class="navx-chart-card" id="nav-accel-card-2">
                     <canvas id="nav-chart-wheel-accel-2" width="420" height="220"></canvas>
                     <div class="navx-chart-caption">Rueda 2</div>
                   </div>
-                  <div class="navx-chart-card">
+                  <div class="navx-chart-card" id="nav-accel-card-3">
                     <canvas id="nav-chart-wheel-accel-3" width="420" height="220"></canvas>
                     <div class="navx-chart-caption">Rueda 3</div>
                   </div>
-                  <div class="navx-chart-card">
+                  <div class="navx-chart-card" id="nav-accel-card-4">
                     <canvas id="nav-chart-wheel-accel-4" width="420" height="220"></canvas>
                     <div class="navx-chart-caption">Rueda 4</div>
                   </div>
