@@ -251,7 +251,7 @@ const navxState = {
     lastStamp: null
   },
   acceleration: {
-    chart: null,
+    charts: {},
     topic: null,
     startStamp: null,
     lastStamp: null,
@@ -4921,8 +4921,9 @@ function handleNavFrequencyMessage(msg) {
 
 function startNavAccelerationMonitoring() {
   if (!ros || !ros.isConnected || !navxState.salidasActive || navxState.activePanel !== 'aceleraciones') return;
-  const chart = ensureNavAccelerationChart();
-  if (!chart || navxState.acceleration.topic) return;
+  if (!navxState.acceleration.wheelNames.length) return;
+  navxState.acceleration.wheelNames.forEach((_, idx) => ensureNavAccelerationChart(idx));
+  if (navxState.acceleration.topic) return;
   navxState.acceleration.topic = new ROSLIB.Topic({
     ros,
     name: '/joint_states',
@@ -4942,28 +4943,30 @@ function stopNavAccelerationMonitoring() {
     lastLinearVel: null,
     lastPos: null
   }));
-  navxClearChart(navxState.acceleration.chart);
+  Object.values(navxState.acceleration.charts).forEach(chart => navxClearChart(chart));
 }
 
-function ensureNavAccelerationChart() {
-  if (navxState.acceleration.chart) return navxState.acceleration.chart;
-  if (!navxState.acceleration.wheelNames.length) return null;
-  const canvas = document.getElementById('nav-chart-wheel-accel');
+function ensureNavAccelerationChart(idx) {
+  if (navxState.acceleration.charts[idx]) return navxState.acceleration.charts[idx];
+  const canvas = document.getElementById(`nav-chart-wheel-accel-${idx + 1}`);
   if (!canvas || !window.Chart) return null;
   const palette = ['#2563eb', '#22c55e', '#f97316', '#a855f7', '#6366f1', '#10b981'];
-  navxState.acceleration.chart = new Chart(canvas.getContext('2d'), {
+  const wheelName = navxState.acceleration.wheelNames[idx] || `Rueda ${idx + 1}`;
+  const chart = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
       labels: [],
-      datasets: navxState.acceleration.wheelNames.map((wheel, idx) => ({
-        label: wheel,
-        data: [],
-        borderColor: palette[idx % palette.length],
-        borderWidth: 2,
-        pointRadius: 1,
-        tension: 0.12,
-        spanGaps: true
-      }))
+      datasets: [
+        {
+          label: wheelName,
+          data: [],
+          borderColor: palette[idx % palette.length],
+          borderWidth: 2,
+          pointRadius: 1,
+          tension: 0.12,
+          spanGaps: true
+        }
+      ]
     },
     options: {
       responsive: false,
@@ -4973,16 +4976,16 @@ function ensureNavAccelerationChart() {
         y: { title: { display: true, text: 'Aceleración (m/s²)' } }
       },
       plugins: {
-        legend: { position: 'bottom' }
+        legend: { display: false }
       }
     }
   });
-  return navxState.acceleration.chart;
+  navxState.acceleration.charts[idx] = chart;
+  return chart;
 }
 
 function handleNavAccelerationMessage(msg) {
-  const chart = ensureNavAccelerationChart();
-  if (!chart) return;
+  if (!navxState.acceleration.wheelNames.length) return;
   const stampSec = navxStampToSeconds(msg && msg.header ? msg.header.stamp : null) ?? (Date.now() / 1000);
   if (!Number.isFinite(stampSec)) return;
   if (navxState.acceleration.startStamp === null) {
@@ -5003,7 +5006,7 @@ function handleNavAccelerationMessage(msg) {
     return;
   }
 
-  const elapsed = stampSec - navxState.acceleration.startStamp;
+  const elapsed = Number((stampSec - navxState.acceleration.startStamp).toFixed(2));
   const accValues = navxState.acceleration.wheelNames.map((wheel, idx) => {
     const wheelIdx = Array.isArray(msg.name) ? msg.name.indexOf(wheel) : -1;
     if (wheelIdx < 0) return null;
@@ -5047,7 +5050,12 @@ function handleNavAccelerationMessage(msg) {
     return;
   }
 
-  navxAppendData(chart, Number(elapsed.toFixed(2)), accValues, NAVX_ACCEL_MAX_POINTS);
+  navxState.acceleration.wheelNames.forEach((wheel, idx) => {
+    const chart = ensureNavAccelerationChart(idx);
+    if (!chart) return;
+    const value = accValues[idx];
+    navxAppendData(chart, elapsed, [Number.isFinite(value) ? value : null], NAVX_ACCEL_MAX_POINTS);
+  });
 }
 
 function primeNavAccelerationState(msg) {

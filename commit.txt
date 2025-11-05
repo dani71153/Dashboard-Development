@@ -1,14 +1,9 @@
-feat(ui-navigation): agrega pestaña “Navegación” con panel “Salidas”, grid 2×2 y subscripciones inteligentes
+feat(acceleration): grid 2×2 y canvas individual por rueda
 
-- Nueva pestaña Navegación tomando como referencia la pestaña Gráficas.
-- Aside con Entradas/Salidas (implementado: Salidas).
-- Panel de Velocidades con 4 gráficas en grid 2×2 y tamaño limitado:
-  /cmd_vel, /cmd_vel_smoothed, /cmd_vel_teleop, /diff_drive_controller/cmd_vel
-- /cmd_vel_smoothed y /diff_drive_controller/cmd_vel ubicadas juntas.
-- Toggle Lineal/Angular para mostrar solo linear.x o angular.z.
-- Gráfica de continuidad usando timestamp de /odometry/filtered.
-- Gráfica de aceleración por rueda usando /joint_states.
-- Consola de depuración con comandos ros2 topic echo/hz.
-- Suscripciones se activan solo cuando la pestaña “Navegación” y el subpanel están visibles.
-- Detección automática Twist/TwistStamped para evitar rechazos en rosbridge.
-- No se publica nada desde el dashboard, solo subscribe.
+- Ajusta sección de aceleraciones a un grid 2×2 con cuatro canvas separados
+  (ruedas 1–4), manteniendo el orden de leyenda solicitado.
+- prueba.html (line 405): nueva estructura de tarjetas y canvas por rueda.
+- dashboard.js (line 237): almacena charts por rueda en el estado de navegación.
+- dashboard.js (line 4922–5042): crea/limpia cada Chart individual, calcula
+  aceleración por rueda ((vel_actual – vel_previa) / dt) y actualiza datasets.
+- Pruebas con: node -e "new Function(require('fs').readFileSync('dashboard.js','utf8'))"
