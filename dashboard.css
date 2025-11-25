@@ -1949,3 +1949,25 @@ label {
     height: 200px !important;
   }
 }
+ing: var(--spacing-md);
+  }
+  
+  nav ul {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  nav a {
+    text-align: center;
+  }
+  
+  .monit-fila {
+    min-width: 280px;
+  }
+  
+  #graficas-odometro canvas,
+  #graficas-encoders canvas {
+    width: 100% !important;
+    height: 200px !important;
+  }
+}

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Pedidos - Restaurante</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f9fafb;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 12px 24px;
+        }
+
+        .header-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .temp {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #4b5563;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+        }
+
+        nav {
+            background-color: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .nav-content {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            gap: 4px;
+            padding: 0 24px;
+        }
+
+        .nav-link {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #4b5563;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+
+        .nav-link:hover {
+            background-color: #f3f4f6;
+        }
+
+        .nav-link.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        main {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        section {
+            display: none;
+        }
+
+        section.active {
+            display: block;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 300;
+            color: #1f2937;
+            margin-bottom: 24px;
+        }
+
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .option-button {
+            background-color: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 24px;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .option-button:hover {
+            border-color: #d1d5db;
+        }
+
+        .option-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .option-name {
+            font-size: 18px;
+            font-weight: 500;
+            color: #111827;
+        }
+
+        .option-price {
+            font-size: 20px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .nfc-container {
+            background-color: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 64px 48px;
+            text-align: center;
+        }
+
+        .nfc-title {
+            font-size: 28px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 24px;
+        }
+
+        .nfc-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .nfc-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .nfc-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .nfc-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.3;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <span class="temp">Temp: — °C</span>
+            <div class="status">
+                <div class="status-dot"></div>
+                <span>Desconectado</span>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="nav-content">
+            <a href="#" class="nav-link active" onclick="showSection('comida'); return false;">Pedir Comida</a>
+            <a href="#" class="nav-link" onclick="showSection('pagar'); return false;">Pagar</a>
+            <a href="#" class="nav-link" onclick="showSection('mesa'); return false;">Mesa</a>
+        </div>
+    </nav>
+
+    <main>
+        <section id="comida" class="active">
+            <h2>Pedir Comida</h2>
+            <div class="options-list">
+                <div class="option-button">
+                    <div class="option-content">
+                        <span class="option-name">Combo 1</span>
+                        <span class="option-price">$12.99</span>
+                    </div>
+                </div>
+                <div class="option-button">
+                    <div class="option-content">
+                        <span class="option-name">Combo 2</span>
+                        <span class="option-price">$15.99</span>
+                    </div>
+                </div>
+                <div class="option-button">
+                    <div class="option-content">
+                        <span class="option-name">Combo 3</span>
+                        <span class="option-price">$18.99</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="pagar">
+            <h2>Pagar</h2>
+            <div class="nfc-container">
+                <h3 class="nfc-title">¡Ponga el NFC por favor!</h3>
+                <div class="nfc-dots">
+                    <div class="nfc-dot"></div>
+                    <div class="nfc-dot"></div>
+                    <div class="nfc-dot"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="mesa">
+            <h2>Mesa</h2>
+            <div class="options-list">
+                <a href="#mesa1" class="option-button">
+                    <span class="option-name">Mesa 1</span>
+                </a>
+                <a href="#mesa2" class="option-button">
+                    <span class="option-name">Mesa 2</span>
+                </a>
+                <a href="#mesa3" class="option-button">
+                    <span class="option-name">Mesa 3</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function showSection(sectionId) {
+            var sections = document.querySelectorAll('section');
+            var links = document.querySelectorAll('.nav-link');
+            
+            sections.forEach(function(section) {
+                section.classList.remove('active');
+            });
+            
+            links.forEach(function(link) {
+                link.classList.remove('active');
+            });
+            
+            document.getElementById(sectionId).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

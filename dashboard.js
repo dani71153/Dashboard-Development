@@ -2478,7 +2478,7 @@ function executeSlamServiceButton(button) {
 }
 
 // EXPONER la misma instancia al resto del dashboard
-window.ros = new ROSLIB.Ros({ url: 'ws://localhost:9090' });
+window.ros = new ROSLIB.Ros({ url: 'ws://192.168.0.162:9090' });
 const ros = window.ros;
 
 // Eventos de conexión
@@ -2529,7 +2529,7 @@ ros.on('error', function () {
 // (Opcional) Auto-reconexión simple
 setInterval(() => {
   try {
-    if (!ros.isConnected) ros.connect('ws://localhost:9090');
+    if (!ros.isConnected) ros.connect('ws://192.168.0.162:9090');
   } catch (_) {}
 }, 3000);
 
@@ -3353,6 +3353,7 @@ const inputMaxVel = document.getElementById('input-max-vel');
 const inputMinVel = document.getElementById('input-min-vel');
 const toggleMaxLine = document.getElementById('toggle-maxline');
 const toggleMinLine = document.getElementById('toggle-minline');
+const toggleFixedScaleRuedas = document.getElementById('toggle-fixed-scale-ruedas');
 
 // Paleta de colores para los valores
 function colorValor(val) {
@@ -3648,6 +3649,7 @@ function updateOdometryLimits() {
   const minVel = parseFloat(inputMinVel.value);
   const showMax = toggleMaxLine.checked;
   const showMin = toggleMinLine.checked;
+  const fixedScale = toggleFixedScaleRuedas ? toggleFixedScaleRuedas.checked : false;
   for (const chart of chartsRuedas) {
     if (showMax) {
       chart.options.plugins.annotation.annotations.maxVel = {
@@ -3667,8 +3669,13 @@ function updateOdometryLimits() {
     } else {
       delete chart.options.plugins.annotation.annotations.minVel;
     }
-    chart.options.scales.y.max = showMax ? maxVel * 1.2 : undefined;
-    chart.options.scales.y.min = showMin ? minVel * 1.2 : undefined;
+    if (fixedScale) {
+      chart.options.scales.y.max = maxVel * 1.2;
+      chart.options.scales.y.min = minVel * 1.2;
+    } else {
+      chart.options.scales.y.max = showMax ? maxVel * 1.2 : undefined;
+      chart.options.scales.y.min = showMin ? minVel * 1.2 : undefined;
+    }
     chart.update();
   }
 }
@@ -3677,6 +3684,7 @@ if (inputMaxVel) inputMaxVel.addEventListener('input', updateOdometryLimits);
 if (inputMinVel) inputMinVel.addEventListener('input', updateOdometryLimits);
 if (toggleMaxLine) toggleMaxLine.addEventListener('change', updateOdometryLimits);
 if (toggleMinLine) toggleMinLine.addEventListener('change', updateOdometryLimits);
+if (toggleFixedScaleRuedas) toggleFixedScaleRuedas.addEventListener('change', updateOdometryLimits);
 updateOdometryLimits();
 
 // ======= NUEVO: Event listener delegado para el botón de reset =======
@@ -3740,8 +3748,13 @@ const inputMinEnc = document.getElementById('input-min-enc');
 const toggleMaxLineEnc = document.getElementById('toggle-maxline-enc');
 const toggleMinLineEnc = document.getElementById('toggle-minline-enc');
 const VUELTA_ENCODER = 2 * Math.PI;
+const TICKS_POR_VUELTA = 4096; // ajusta si la resolución del encoder cambia
 let modoModular = false;
+let encodersEnTicks = false;
 const btnToggleModular = document.getElementById('toggle-modular-enc');
+const btnResetEncTime = document.getElementById('reset-encoders-time');
+const btnToggleUnidadEnc = document.getElementById('toggle-unidad-enc');
+let encodersResetPendiente = false;
 
 // Nueva: Guarda la instancia de la suscripción para poder activarla/desactivarla
 let jointStatesListenerEnc = null;
@@ -3848,12 +3861,53 @@ if (btnToggleModular) {
   btnToggleModular.addEventListener('click', function () {
     modoModular = !modoModular;
     btnToggleModular.textContent = modoModular ? 'Ver modo incremental' : 'Ver modo modular';
-    chartsEncoders.forEach(chart => {
-      chart.data.labels = [];
-      chart.data.datasets[0].data = [];
-      chart.update();
-    });
+    resetearDatosEncodersParaUnidad();
   });
+}
+
+if (btnToggleUnidadEnc) {
+  btnToggleUnidadEnc.addEventListener('click', function () {
+    encodersEnTicks = !encodersEnTicks;
+    btnToggleUnidadEnc.textContent = encodersEnTicks ? 'Ver en rad' : 'Ver en ticks';
+    resetearDatosEncodersParaUnidad();
+  });
+}
+
+function etiquetaUnidadEncoder() {
+  return encodersEnTicks ? 'ticks' : 'rad';
+}
+
+function convertirEncoderUnidad(valorRad) {
+  return encodersEnTicks ? valorRad * (TICKS_POR_VUELTA / VUELTA_ENCODER) : valorRad;
+}
+
+function resetearDatosEncodersParaUnidad() {
+  const unidad = etiquetaUnidadEncoder();
+  chartsEncoders.forEach((chart, idx) => {
+    chart.data.labels = [];
+    chart.data.datasets[0].data = [];
+    chart.data.datasets[0].label = `Encoder ${idx + 1} (${unidad})`;
+    if (chart.options?.scales?.y?.title) {
+      chart.options.scales.y.title.text = encodersEnTicks ? 'Posición (ticks)' : 'Posición (rad)';
+    }
+    chart.update();
+  });
+  if (divEncStats) divEncStats.innerHTML = "<b>Esperando datos...</b>";
+  if (divEncodersDetalles) divEncodersDetalles.innerHTML = '';
+  if (spanEncStatMax) spanEncStatMax.textContent = '';
+  if (spanEncStatMin) spanEncStatMin.textContent = '';
+  if (spanEncStatAvg) spanEncStatAvg.textContent = '';
+}
+
+function resetearTiempoEncoders() {
+  // Reinicia la base de tiempo y limpia datos/estadísticas mostradas.
+  tiempoInicioEnc = null;
+  encodersResetPendiente = true;
+  resetearDatosEncodersParaUnidad();
+}
+
+if (btnResetEncTime) {
+  btnResetEncTime.addEventListener('click', resetearTiempoEncoders);
 }
 
 // --------- SUSCRIPCIÓN Y DESUSCRIPCIÓN DINÁMICA ---------
@@ -3866,8 +3920,22 @@ function activarGraficasEncoders() {
     messageType: 'sensor_msgs/JointState'
   });
   jointStatesListenerEnc.subscribe(function (msg) {
+    const unidad = etiquetaUnidadEncoder();
     if (!tiempoInicioEnc) tiempoInicioEnc = Date.now();
     const tiempo = ((Date.now() - tiempoInicioEnc) / 1000).toFixed(1);
+
+    if (encodersResetPendiente) {
+      chartsEncoders.forEach(chart => {
+        chart.data.labels.push(0);
+        chart.data.datasets[0].data.push(0);
+        if (chart.data.labels.length > ENCODER_HISTORY_SIZE) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
+        }
+        chart.update();
+      });
+      encodersResetPendiente = false;
+    }
 
     let allPositions = [];
     let detallesHTML = [];
@@ -3879,11 +3947,12 @@ function activarGraficasEncoders() {
         if (modoModular) {
           valPos = ((valPos % VUELTA_ENCODER) + VUELTA_ENCODER) % VUELTA_ENCODER;
         }
-        allPositions.push(valPos);
+        const valorMostrar = convertirEncoderUnidad(valPos);
+        allPositions.push(valorMostrar);
 
         const chart = chartsEncoders[idx];
         chart.data.labels.push(tiempo);
-        chart.data.datasets[0].data.push(valPos);
+        chart.data.datasets[0].data.push(valorMostrar);
 
         if (chart.data.labels.length > ENCODER_HISTORY_SIZE) {
           chart.data.labels.shift();
@@ -3899,9 +3968,9 @@ function activarGraficasEncoders() {
         detallesHTML.push(
           `<div style="margin-bottom:0.5em;">
             <b style="color:${COLOR_GRAFICA_ENCODER};">Encoder ${idx + 1}</b><br>
-            <span>Máx:</span> ${pmax} rad<br>
-            <span>Mín:</span> ${pmin} rad<br>
-            <span>Prom:</span> ${pavg} rad
+            <span>Máx:</span> ${pmax} ${unidad}<br>
+            <span>Mín:</span> ${pmin} ${unidad}<br>
+            <span>Prom:</span> ${pavg} ${unidad}
           </div>`
         );
       }
