@@ -4390,6 +4390,96 @@ function desactivarGraficasCorriente() {
     jointStatesListenerCorr = null;
   }
 }
+
+// --- Parámetros y gráficas de Batería ---
+const bateriaConfigs = [
+  { key: '5v', canvasId: 'grafica-bateria-5v', topic: '/voltaje/v5', label: '5V (Arduino / ESP32)' },
+  { key: '14v', canvasId: 'grafica-bateria-14v', topic: '/voltaje/v14', label: '14V (Batería)' }
+];
+const bateriaCharts = {};
+const bateriaListeners = {};
+const bateriaHistoryLimit = 120;
+let bateriaT0 = null;
+const bateria5vValor = document.getElementById('bateria-5v-valor');
+const bateria14vValor = document.getElementById('bateria-14v-valor');
+
+function initChartsBateria() {
+  bateriaConfigs.forEach(cfg => {
+    if (bateriaCharts[cfg.key]) return;
+    const canvas = document.getElementById(cfg.canvasId);
+    if (!canvas) return;
+    bateriaCharts[cfg.key] = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: cfg.label,
+          data: [],
+          borderWidth: 2,
+          borderColor: cfg.key === '5v' ? '#16a34a' : '#dc2626',
+          pointRadius: 1
+        }]
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        scales: {
+          x: { title: { display: true, text: 'Tiempo (s)' } },
+          y: {
+            title: { display: true, text: 'Voltaje (V)' }
+          }
+        },
+        plugins: { legend: { display: true } }
+      }
+    });
+  });
+}
+
+function updateBateriaLabel(cfgKey, valor) {
+  const target = cfgKey === '5v' ? bateria5vValor : cfgKey === '14v' ? bateria14vValor : null;
+  if (!target) return;
+  target.textContent = (cfgKey === '5v' ? '5V:' : '14V:') + ` ${Number.isFinite(valor) ? valor.toFixed(2) : '—'}`;
+}
+
+function activarGraficasBateria() {
+  if (!ros) return;
+  initChartsBateria();
+  if (!bateriaT0) bateriaT0 = Date.now();
+
+  bateriaConfigs.forEach(cfg => {
+    if (bateriaListeners[cfg.key]) return;
+    const chart = bateriaCharts[cfg.key];
+    if (!chart) return;
+    const topic = new ROSLIB.Topic({
+      ros: ros,
+      name: cfg.topic,
+      messageType: 'std_msgs/Float32'
+    });
+    bateriaListeners[cfg.key] = topic;
+    topic.subscribe(message => {
+      const valor = Number(message?.data);
+      const t = ((Date.now() - bateriaT0) / 1000).toFixed(1);
+      chart.data.labels.push(t);
+      chart.data.datasets[0].data.push(valor);
+      if (chart.data.labels.length > bateriaHistoryLimit) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+      }
+      chart.update();
+      updateBateriaLabel(cfg.key, valor);
+    });
+  });
+}
+
+function desactivarGraficasBateria() {
+  bateriaConfigs.forEach(cfg => {
+    if (bateriaListeners[cfg.key]) {
+      bateriaListeners[cfg.key].unsubscribe();
+      delete bateriaListeners[cfg.key];
+    }
+  });
+}
+
 // --- Charts y parámetros de MPU ---
 let chartAcel, chartGyro, chartOrient;
 let mpuListener = null;
@@ -4668,6 +4758,7 @@ const botonesGraficas = document.querySelectorAll('.boton-grafica');
 const divGraficasOdometro = document.getElementById('graficas-odometro');
 const divGraficasEncoders = document.getElementById('graficas-encoders');
 const divGraficasMotores = document.getElementById('graficas-motores');
+const divGraficasBateria = document.getElementById('graficas-bateria');
 const divGraficasUnicas = document.getElementById('graficas-unicas');
 const divGraficasMPU = document.getElementById('graficas-mpu');  // << NUEVO
 
@@ -5324,6 +5415,7 @@ if (botonesGraficas.length > 0) {
       if (divGraficasOdometro) divGraficasOdometro.style.display = "none";
       if (divGraficasEncoders) divGraficasEncoders.style.display = "none";
       if (divGraficasMotores) divGraficasMotores.style.display = "none";
+      if (divGraficasBateria) divGraficasBateria.style.display = "none";
       if (divGraficasUnicas) divGraficasUnicas.style.display = "none";
       if (divGraficasMPU) divGraficasMPU.style.display = "none";      // << NUEVO
 
@@ -5331,6 +5423,7 @@ if (botonesGraficas.length > 0) {
       if (typeof desactivarGraficasOdo === "function") desactivarGraficasOdo();
       if (typeof desactivarGraficasEncoders === "function") desactivarGraficasEncoders();
       if (typeof desactivarGraficasCorriente === "function") desactivarGraficasCorriente();
+      if (typeof desactivarGraficasBateria === "function") desactivarGraficasBateria();
       if (typeof desactivarGraficasMPU === "function") desactivarGraficasMPU(); // << NUEVO
 
       // Solo activa el que corresponde
@@ -5348,6 +5441,10 @@ if (botonesGraficas.length > 0) {
         divGraficasMotores.style.display = "flex";
         if (typeof updateCorrienteLimits === "function") updateCorrienteLimits();
         if (typeof activarGraficasCorriente === "function") activarGraficasCorriente();
+      }
+      if (tipo === "bateria" && divGraficasBateria) {
+        divGraficasBateria.style.display = "flex";
+        if (typeof activarGraficasBateria === "function") activarGraficasBateria();
       }
       if (tipo === "unicas" && divGraficasUnicas) {
         divGraficasUnicas.style.display = "block";

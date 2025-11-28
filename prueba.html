@@ -217,7 +217,22 @@ les -->
             </div>
             
           </div>
-          
+          <div id="graficas-bateria" style="display:none;gap:2rem;flex-wrap:wrap;">
+            <div>
+              <canvas id="grafica-bateria-5v" width="350" height="160"></canvas>
+              <div style="text-align:center">5V (Arduino / ESP32)</div>
+            </div>
+            <div>
+              <canvas id="grafica-bateria-14v" width="350" height="160"></canvas>
+              <div style="text-align:center">14V (Batería)</div>
+            </div>
+            <div id="bateria-stats">
+              <b>Última lectura</b><br>
+              <span id="bateria-5v-valor">5V: —</span><br>
+              <span id="bateria-14v-valor">14V: —</span>
+            </div>
+          </div>
+
           <div id="graficas-mpu" style="display:none;gap:2rem;flex-wrap:wrap;">
             <div>
               <canvas id="grafica-aceleracion" width="340" height="150"></canvas>
