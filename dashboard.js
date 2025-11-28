@@ -2655,6 +2655,42 @@ navLinks.forEach(link => {
 window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', handleHashChange);
 
+// Tabs internos de la pestaña Menú
+const menuNavLinks = document.querySelectorAll('.menu-nav-link');
+const menuPanels = document.querySelectorAll('.menu-panel');
+
+function showMenuPanel(target) {
+  if (!menuPanels.length || !menuNavLinks.length) return;
+  const targetId = `menu-${target}`;
+  menuPanels.forEach(panel => panel.classList.toggle('active', panel.id === targetId));
+  menuNavLinks.forEach(link => link.classList.toggle('active', link.dataset.menuTarget === target));
+}
+
+menuNavLinks.forEach(link => {
+  link.addEventListener('click', () => showMenuPanel(link.dataset.menuTarget));
+});
+
+showMenuPanel('comida');
+
+const menuMesaInputs = document.querySelectorAll('.menu-mesa-input');
+
+function updateMesaLabel(mesaId) {
+  const xInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="x"]`);
+  const yInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="y"]`);
+  const label = document.querySelector(`.menu-mesa-current[data-mesa="${mesaId}"]`);
+  if (!label || !xInput || !yInput) return;
+
+  const xVal = Number.parseFloat(xInput.value);
+  const yVal = Number.parseFloat(yInput.value);
+  const format = value => (Number.isFinite(value) ? value.toFixed(2) : '—');
+  label.textContent = `Actual: X=${format(xVal)}, Y=${format(yVal)}`;
+}
+
+menuMesaInputs.forEach(input => {
+  input.addEventListener('input', () => updateMesaLabel(input.dataset.mesa));
+  updateMesaLabel(input.dataset.mesa);
+});
+
 if (dynamicMapButton) {
   dynamicMapButton.addEventListener('click', () => requestDynamicMap(dynamicMapButton));
 }

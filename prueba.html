@@ -37,6 +37,7 @@ les -->
       <li><a href="#plano_xy" data-tab="plano_xy">Plano XY</a></li>
       <li><a href="#calibracion" data-tab="calibracion">Calibración</a></li>
       <li><a href="#mapa" data-tab="mapa">Mapa</a></li>
+      <li><a href="#menu" data-tab="menu">Menú</a></li>
     </ul>
   </nav>
   <aside id="estado-ros">
@@ -782,9 +783,120 @@ les -->
         <div id="mapa-canvas" class="mapa-canvas">
           <div class="mapa-placeholder">Conéctate a ROS para visualizar el mapa.</div>
         </div>
-        <div id="xy-poi-list" class="xy-poi-list">
-          <div class="xy-poi-empty">Agrega puntos para destacarlos en el plano.</div>
+      <div id="xy-poi-list" class="xy-poi-list">
+        <div class="xy-poi-empty">Agrega puntos para destacarlos en el plano.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section id="menu" style="display:none;">
+    <h2>Menú</h2>
+    <div class="menu-shell">
+      <header class="menu-top">
+        <span class="menu-temp">Temp: — °C</span>
+        <div class="menu-status">
+          <span class="menu-status-dot"></span>
+          <span>Desconectado</span>
         </div>
+      </header>
+
+      <nav class="menu-nav">
+        <button class="menu-nav-link active" data-menu-target="comida">Pedir Comida</button>
+        <button class="menu-nav-link" data-menu-target="pagar">Pagar</button>
+        <button class="menu-nav-link" data-menu-target="mesa">Mesa</button>
+      </nav>
+
+      <div class="menu-panels">
+        <section class="menu-panel active" id="menu-comida">
+          <h3>Pedir Comida</h3>
+          <div class="menu-options">
+            <button class="menu-option">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Combo 1</span>
+                <span class="menu-option-price">$12.99</span>
+              </div>
+            </button>
+            <button class="menu-option">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Combo 2</span>
+                <span class="menu-option-price">$15.99</span>
+              </div>
+            </button>
+            <button class="menu-option">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Combo 3</span>
+                <span class="menu-option-price">$18.99</span>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section class="menu-panel" id="menu-pagar">
+          <h3>Pagar</h3>
+          <div class="menu-nfc">
+            <h4>¡Ponga el NFC por favor!</h4>
+            <div class="menu-nfc-dots">
+              <span class="menu-nfc-dot"></span>
+              <span class="menu-nfc-dot"></span>
+              <span class="menu-nfc-dot"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="menu-panel" id="menu-mesa">
+          <h3>Mesa</h3>
+          <div class="menu-options">
+            <div class="menu-option menu-mesa-card">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Mesa 1</span>
+                <span class="menu-mesa-current" data-mesa="1">Actual: X=0.00, Y=0.00</span>
+              </div>
+              <div class="menu-mesa-fields">
+                <label>
+                  <span>X (m)</span>
+                  <input type="number" step="0.01" value="0" data-mesa="1" data-axis="x" class="menu-mesa-input">
+                </label>
+                <label>
+                  <span>Y (m)</span>
+                  <input type="number" step="0.01" value="0" data-mesa="1" data-axis="y" class="menu-mesa-input">
+                </label>
+              </div>
+            </div>
+            <div class="menu-option menu-mesa-card">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Mesa 2</span>
+                <span class="menu-mesa-current" data-mesa="2">Actual: X=1.00, Y=0.50</span>
+              </div>
+              <div class="menu-mesa-fields">
+                <label>
+                  <span>X (m)</span>
+                  <input type="number" step="0.01" value="1" data-mesa="2" data-axis="x" class="menu-mesa-input">
+                </label>
+                <label>
+                  <span>Y (m)</span>
+                  <input type="number" step="0.01" value="0.5" data-mesa="2" data-axis="y" class="menu-mesa-input">
+                </label>
+              </div>
+            </div>
+            <div class="menu-option menu-mesa-card">
+              <div class="menu-option-content">
+                <span class="menu-option-name">Mesa 3</span>
+                <span class="menu-mesa-current" data-mesa="3">Actual: X=-0.50, Y=1.20</span>
+              </div>
+              <div class="menu-mesa-fields">
+                <label>
+                  <span>X (m)</span>
+                  <input type="number" step="0.01" value="-0.5" data-mesa="3" data-axis="x" class="menu-mesa-input">
+                </label>
+                <label>
+                  <span>Y (m)</span>
+                  <input type="number" step="0.01" value="1.2" data-mesa="3" data-axis="y" class="menu-mesa-input">
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </section>
