@@ -860,58 +860,61 @@ les -->
         </section>
 
         <section class="menu-panel" id="menu-mesa">
-          <h3>Mesa</h3>
+          <h3>Mesa <span id="mesa-conn-indicator" class="mesa-conn-indicator">🔴 Sin conexión</span></h3>
           <div class="menu-mesa-toolbar">
             <div class="mesa-angle-toggle">
               <span>Theta en</span>
               <button type="button" id="mesa-angle-toggle">Usar radianes</button>
               <span class="mesa-angle-unit" id="mesa-angle-unit">°</span>
             </div>
-            <div class="mesa-odom-bar">
-              <span><strong>Odom cruda:</strong> <span id="mesa-odom-cruda">—</span></span>
-              <span><strong>Odom en mapa:</strong> <span id="mesa-odom-mapa">—</span></span>
-              <span><strong>Distancia:</strong> <span id="mesa-odom-dist">—</span></span>
-            </div>
-            <div class="mesa-yaw-bar">
-              <span><strong>Yaw robot:</strong> <span id="mesa-yaw-robot">—</span></span>
-              <span><strong>Yaw objetivo:</strong> <span id="mesa-yaw-objetivo">—</span></span>
-              <span><strong>Yaw odom cruda:</strong> <span id="mesa-yaw-raw">—</span></span>
-              <span><strong>Yaw diff:</strong> <span id="mesa-yaw-diff">—</span></span>
-            </div>
-            <div class="mesa-estado">
-              <span>Estado controlador:</span>
-              <span id="mesa-estado-text">Sin datos</span>
-            </div>
           </div>
-          <div class="menu-mesa-layout">
-            <div class="menu-mesa-left">
-              <aside class="menu-mesa-aside">
-                <h4>Acciones</h4>
-                <div class="menu-mesa-actions">
-                  <button type="button" id="mesa-clear-queue">Limpiar cola</button>
-                  <button type="button" id="mesa-cancel-nav">Cancelar navegación</button>
-                  <button type="button" id="mesa-reset-node">Reiniciar nodo</button>
-                </div>
-              </aside>
-              <aside class="menu-mesa-aside">
-                <h4>Acción rápida</h4>
-                <div class="menu-mesa-actions">
-                  <button type="button" id="mesa-publicar-todas">Publicar todas las mesas</button>
-                </div>
-              </aside>
-              <aside class="menu-mesa-aside">
-              <h4>Estado</h4>
-              <div class="menu-mesa-log">
-                <div><strong>Mesa actual:</strong> <span id="mesa-cola-actual">—</span></div>
-                <div><strong>Cola completa:</strong> <span id="mesa-listado-colas">—</span></div>
-                <div class="mesa-log-header">
-                  <strong>Eventos:</strong>
-                  <button type="button" id="mesa-clear-log">Limpiar log</button>
-                </div>
-                <div id="mesa-log" class="mesa-log"></div>
+            <div class="menu-mesa-layout">
+              <div class="menu-mesa-left">
+                <aside class="menu-mesa-aside">
+                  <h4>Acciones</h4>
+                  <div class="menu-mesa-actions">
+                    <label class="mesa-mode-row">
+                      <span>Modo:</span>
+                      <select id="mesa-mode-select">
+                        <option value="pedido" selected>Pedido</option>
+                        <option value="entrega">Entrega</option>
+                        <option value="pago">Pago</option>
+                        <option value="auto">Auto</option>
+                      </select>
+                      <button type="button" id="mesa-mode-apply">Cambiar</button>
+                    </label>
+                    <button type="button" id="mesa-clear-queue">Limpiar cola</button>
+                    <button type="button" id="mesa-cancel-nav">Cancelar navegación</button>
+                    <button type="button" id="mesa-reset-node">Reiniciar nodo</button>
+                  </div>
+                </aside>
+                <aside class="menu-mesa-aside">
+                  <h4>Acción rápida</h4>
+                  <div class="menu-mesa-actions">
+                    <button type="button" id="mesa-publicar-todas">Publicar todas las mesas</button>
+                  </div>
+                </aside>
+                <aside class="menu-mesa-aside">
+                  <h4>Estado</h4>
+                  <div class="mesa-status-grid">
+                    <div><strong>Estado:</strong> <span id="mesa-estado-text">Sin datos</span></div>
+                    <div><strong>Modo:</strong> <span id="mesa-modo-actual">—</span></div>
+                    <div><strong>Mesa actual:</strong> <span id="mesa-cola-actual">Sin mesa actual.</span></div>
+                    <div><strong>Cola completa:</strong> <span id="mesa-listado-colas">—</span></div>
+                    <div><strong>Odom cruda:</strong> <span id="mesa-odom-cruda">Esperando…</span></div>
+                    <div><strong>Odom en mapa:</strong> <span id="mesa-odom-mapa">Esperando…</span></div>
+                    <div><strong>Distancia:</strong> <span id="mesa-odom-dist">Esperando…</span></div>
+                    <div><strong>Yaw odom:</strong> <span id="mesa-yaw-raw">Esperando…</span></div>
+                    <div><strong>Yaw mapa:</strong> <span id="mesa-yaw-robot">Esperando…</span></div>
+                    <div><strong>Yaw objetivo:</strong> <span id="mesa-yaw-objetivo">Esperando…</span></div>
+                    <div><strong>Yaw diff:</strong> <span id="mesa-yaw-diff">Esperando…</span></div>
+                    <div><strong>Validación:</strong> <span id="mesa-validacion-estado">Esperando…</span></div>
+                    <div><strong>Objetivos descartados:</strong> <span id="mesa-objetivos-descartados">Esperando…</span></div>
+                    <div><strong>Descartados detalle:</strong> <span id="mesa-objetivos-descartados-lista">Esperando…</span></div>
+                    <div><strong>Odom timeout:</strong> <span id="mesa-odom-timeout">Esperando…</span></div>
+                  </div>
+                </aside>
               </div>
-            </aside>
-            </div>
             <div class="menu-options">
             <div class="menu-option menu-mesa-card">
               <div class="menu-option-content">

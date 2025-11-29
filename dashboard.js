@@ -2631,6 +2631,9 @@ function showTab(tabId) {
   updateCalibracionMonitoring();
   updatePlanoMonitoring();
   updateNavegacionMonitoring();
+  if (tabId === 'menu') {
+    startMesaIntegration();
+  }
 }
 
 function getTabFromHash() {
@@ -2657,6 +2660,12 @@ navLinks.forEach(link => {
 // Carga la pestaña correcta al cargar la página y al cambiar el hash
 window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', handleHashChange);
+// Si ya estamos conectados a ROS al cargar, arrancar mesa
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.ros && window.ros.isConnected) {
+    startMesaIntegration();
+  }
+});
 
 // Tabs internos de la pestaña Menú
 const menuNavLinks = document.querySelectorAll('.menu-nav-link');
@@ -2686,13 +2695,7 @@ const mesaClearQueueBtn = document.getElementById('mesa-clear-queue');
 const mesaCancelNavBtn = document.getElementById('mesa-cancel-nav');
 const mesaColaActualEl = document.getElementById('mesa-cola-actual');
 const mesaListadoColasEl = document.getElementById('mesa-listado-colas');
-const mesaLogEl = document.getElementById('mesa-log');
-const mesaPublicarTodasBtn = document.getElementById('mesa-publicar-todas');
-const mesaClearLogBtn = document.getElementById('mesa-clear-log');
-const mesaResetNodeBtn = document.getElementById('mesa-reset-node');
-const mesaModeSelect = document.getElementById('mesa-mode-select');
-const mesaModeApply = document.getElementById('mesa-mode-apply');
-const mesaModoActualEl = document.getElementById('mesa-modo-actual');
+const mesaConnIndicator = document.getElementById('mesa-conn-indicator');
 const mesaOdomCrudaEl = document.getElementById('mesa-odom-cruda');
 const mesaOdomMapaEl = document.getElementById('mesa-odom-mapa');
 const mesaOdomDistEl = document.getElementById('mesa-odom-dist');
@@ -2700,6 +2703,17 @@ const mesaYawRobotEl = document.getElementById('mesa-yaw-robot');
 const mesaYawObjetivoEl = document.getElementById('mesa-yaw-objetivo');
 const mesaYawRawEl = document.getElementById('mesa-yaw-raw');
 const mesaYawDiffEl = document.getElementById('mesa-yaw-diff');
+const mesaValidacionEl = document.getElementById('mesa-validacion-estado');
+const mesaObjetivosDescartadosEl = document.getElementById('mesa-objetivos-descartados');
+const mesaObjetivosDescartadosListaEl = document.getElementById('mesa-objetivos-descartados-lista');
+const mesaOdomTimeoutEl = document.getElementById('mesa-odom-timeout');
+const mesaLogEl = document.getElementById('mesa-log');
+const mesaPublicarTodasBtn = document.getElementById('mesa-publicar-todas');
+const mesaClearLogBtn = document.getElementById('mesa-clear-log');
+const mesaResetNodeBtn = document.getElementById('mesa-reset-node');
+const mesaModeSelect = document.getElementById('mesa-mode-select');
+const mesaModeApply = document.getElementById('mesa-mode-apply');
+const mesaModoActualEl = document.getElementById('mesa-modo-actual');
 
 let mesaAngleMode = 'deg'; // 'deg' | 'rad'
 let mesaActiveMode = 'pedido'; // pedido | entrega | pago | auto
@@ -2707,11 +2721,14 @@ let mesaEstadoSub = null;
 let mesaClearQueuePub = null;
 let mesaResetPub = null;
 let mesaModoPub = null;
+let mesaEntradasPub = null;
 let mesaEntradasPedidoPub = null;
 let mesaEntradasEntregaPub = null;
 let mesaEntradasPagoPub = null;
 let mesaColaActualSub = null;
 let mesaListadoColasSub = null;
+let mesaModoActualSub = null;
+let mesaHeartbeatSub = null;
 let mesaOdomCrudaSub = null;
 let mesaOdomMapaSub = null;
 let mesaOdomDistSub = null;
@@ -2719,6 +2736,10 @@ let mesaYawRobotSub = null;
 let mesaYawObjetivoSub = null;
 let mesaYawRawSub = null;
 let mesaYawDiffSub = null;
+let mesaValidacionSub = null;
+let mesaObjetivosDescartadosSub = null;
+let mesaObjetivosDescartadosListaSub = null;
+let mesaOdomTimeoutSub = null;
 
 function ensureMesaRosObjects() {
   const rosConn = window.ros && window.ros.isConnected;
@@ -2848,6 +2869,21 @@ function mesaLogClear() {
 function startMesaIntegration() {
   if (!ros || !ros.isConnected) return;
   ensureMesaRosObjects();
+  if (mesaColaActualEl) mesaColaActualEl.textContent = 'Sin mesa actual.';
+  if (mesaListadoColasEl) mesaListadoColasEl.textContent = '—';
+  if (mesaModoActualEl) mesaModoActualEl.textContent = '—';
+  if (mesaOdomCrudaEl) mesaOdomCrudaEl.textContent = 'Esperando…';
+  if (mesaOdomMapaEl) mesaOdomMapaEl.textContent = 'Esperando…';
+  if (mesaOdomDistEl) mesaOdomDistEl.textContent = 'Esperando…';
+  if (mesaYawRobotEl) mesaYawRobotEl.textContent = 'Esperando…';
+  if (mesaYawObjetivoEl) mesaYawObjetivoEl.textContent = 'Esperando…';
+  if (mesaYawRawEl) mesaYawRawEl.textContent = 'Esperando…';
+  if (mesaYawDiffEl) mesaYawDiffEl.textContent = 'Esperando…';
+  if (mesaValidacionEl) mesaValidacionEl.textContent = 'Esperando…';
+  if (mesaObjetivosDescartadosEl) mesaObjetivosDescartadosEl.textContent = 'Esperando…';
+  if (mesaObjetivosDescartadosListaEl) mesaObjetivosDescartadosListaEl.textContent = 'Esperando…';
+  if (mesaOdomTimeoutEl) mesaOdomTimeoutEl.textContent = 'Esperando…';
+  if (mesaConnIndicator) mesaConnIndicator.textContent = '🟠 Conectando...';
   if (!mesaEstadoSub) {
     mesaEstadoSub = new ROSLIB.Topic({
       ros,
@@ -2868,6 +2904,30 @@ function startMesaIntegration() {
       ros,
       name: '/entradas_mesas',
       messageType: 'geometry_msgs/msg/PoseStamped'
+    });
+  }
+  if (!mesaModoActualSub) {
+    mesaModoActualSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/modo_actual',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaModoActualSub.subscribe(msg => {
+      if (mesaModoActualEl) mesaModoActualEl.textContent = msg?.data || '—';
+    });
+  }
+  if (!mesaHeartbeatSub) {
+    mesaHeartbeatSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/en_ejecucion',
+      messageType: 'std_msgs/msg/Bool',
+      queue_length: 1
+    });
+    mesaHeartbeatSub.subscribe(msg => {
+      if (!mesaConnIndicator) return;
+      const alive = !!msg?.data;
+      mesaConnIndicator.textContent = alive ? '🟢 En ejecución' : '🔴 Sin conexión';
     });
   }
   if (mesaEstadoText && !mesaEstadoText.textContent) {
@@ -2895,8 +2955,18 @@ function startMesaIntegration() {
       queue_length: 1
     });
     mesaColaActualSub.subscribe(msg => {
-      if (mesaColaActualEl) mesaColaActualEl.textContent = msg?.data || '—';
-      mesaLogPush('cola_actual', msg?.data || '—');
+      const raw = typeof msg?.data === 'string' ? msg.data.trim() : '';
+      const coordMatch = raw.match(/^\(?\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*,\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*\)?$/);
+      let texto = raw || 'Sin mesa actual.';
+      if (coordMatch) {
+        const xVal = Number(coordMatch[1]);
+        const yVal = Number(coordMatch[2]);
+        if (Number.isFinite(xVal) && Number.isFinite(yVal)) {
+          texto = `X=${xVal.toFixed(3)}, Y=${yVal.toFixed(3)}`;
+        }
+      }
+      if (mesaColaActualEl) mesaColaActualEl.textContent = texto;
+      mesaLogPush('cola_actual', texto);
     });
   }
   if (!mesaListadoColasSub) {
@@ -2962,7 +3032,7 @@ function startMesaIntegration() {
   if (!mesaYawRobotSub) {
     mesaYawRobotSub = new ROSLIB.Topic({
       ros,
-      name: '/controlador_mesas/yaw_robot',
+      name: '/controlador_mesas/yaw_mapa',
       messageType: 'std_msgs/msg/Float32',
       queue_length: 1
     });
@@ -2990,7 +3060,7 @@ function startMesaIntegration() {
   if (!mesaYawRawSub) {
     mesaYawRawSub = new ROSLIB.Topic({
       ros,
-      name: '/controlador_mesas/yaw_raw_odom',
+      name: '/controlador_mesas/yaw_odom',
       messageType: 'std_msgs/msg/Float32',
       queue_length: 1
     });
@@ -3013,6 +3083,55 @@ function startMesaIntegration() {
         const v = Number(msg?.data ?? NaN);
         mesaYawDiffEl.textContent = Number.isFinite(v) ? `${v.toFixed(3)} rad` : '—';
       }
+    });
+  }
+  if (!mesaValidacionSub) {
+    mesaValidacionSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/validacion_estado',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaValidacionSub.subscribe(msg => {
+      if (mesaValidacionEl) mesaValidacionEl.textContent = msg?.data || '—';
+    });
+  }
+  if (!mesaObjetivosDescartadosSub) {
+    mesaObjetivosDescartadosSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/objetivos_descartados',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaObjetivosDescartadosSub.subscribe(msg => {
+      if (mesaObjetivosDescartadosEl) {
+        const v = Number(msg?.data ?? NaN);
+        mesaObjetivosDescartadosEl.textContent = Number.isFinite(v) ? v.toFixed(0) : '—';
+      }
+    });
+  }
+  if (!mesaObjetivosDescartadosListaSub) {
+    mesaObjetivosDescartadosListaSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/objetivos_descartados_lista',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaObjetivosDescartadosListaSub.subscribe(msg => {
+      if (mesaObjetivosDescartadosListaEl) {
+        mesaObjetivosDescartadosListaEl.textContent = msg?.data || '—';
+      }
+    });
+  }
+  if (!mesaOdomTimeoutSub) {
+    mesaOdomTimeoutSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/odom_timeout',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaOdomTimeoutSub.subscribe(msg => {
+      if (mesaOdomTimeoutEl) mesaOdomTimeoutEl.textContent = msg?.data || '—';
     });
   }
 }
@@ -3066,6 +3185,14 @@ function stopMesaIntegration(clear = false) {
     mesaListadoColasSub.unsubscribe();
     mesaListadoColasSub = null;
   }
+  if (mesaModoActualSub) {
+    mesaModoActualSub.unsubscribe();
+    mesaModoActualSub = null;
+  }
+  if (mesaHeartbeatSub) {
+    mesaHeartbeatSub.unsubscribe();
+    mesaHeartbeatSub = null;
+  }
   if (mesaOdomCrudaSub) {
     mesaOdomCrudaSub.unsubscribe();
     mesaOdomCrudaSub = null;
@@ -3094,12 +3221,46 @@ function stopMesaIntegration(clear = false) {
     mesaYawDiffSub.unsubscribe();
     mesaYawDiffSub = null;
   }
+  if (mesaValidacionSub) {
+    mesaValidacionSub.unsubscribe();
+    mesaValidacionSub = null;
+  }
+  if (mesaObjetivosDescartadosSub) {
+    mesaObjetivosDescartadosSub.unsubscribe();
+    mesaObjetivosDescartadosSub = null;
+  }
+  if (mesaObjetivosDescartadosListaSub) {
+    mesaObjetivosDescartadosListaSub.unsubscribe();
+    mesaObjetivosDescartadosListaSub = null;
+  }
+  if (mesaOdomTimeoutSub) {
+    mesaOdomTimeoutSub.unsubscribe();
+    mesaOdomTimeoutSub = null;
+  }
   if (clear && mesaEstadoText) {
     mesaEstadoText.textContent = 'Sin conexión';
   }
   if (clear && mesaModoActualEl) {
     mesaModoActualEl.textContent = '—';
   }
+  if (clear && mesaColaActualEl) {
+    mesaColaActualEl.textContent = '—';
+  }
+  if (clear && mesaListadoColasEl) {
+    mesaListadoColasEl.textContent = '—';
+  }
+  if (clear && mesaOdomCrudaEl) mesaOdomCrudaEl.textContent = '—';
+  if (clear && mesaOdomMapaEl) mesaOdomMapaEl.textContent = '—';
+  if (clear && mesaOdomDistEl) mesaOdomDistEl.textContent = '—';
+  if (clear && mesaYawRobotEl) mesaYawRobotEl.textContent = '—';
+  if (clear && mesaYawObjetivoEl) mesaYawObjetivoEl.textContent = '—';
+  if (clear && mesaYawRawEl) mesaYawRawEl.textContent = '—';
+  if (clear && mesaYawDiffEl) mesaYawDiffEl.textContent = '—';
+  if (clear && mesaValidacionEl) mesaValidacionEl.textContent = '—';
+  if (clear && mesaObjetivosDescartadosEl) mesaObjetivosDescartadosEl.textContent = '—';
+  if (clear && mesaObjetivosDescartadosListaEl) mesaObjetivosDescartadosListaEl.textContent = '—';
+  if (clear && mesaOdomTimeoutEl) mesaOdomTimeoutEl.textContent = '—';
+  if (clear && mesaConnIndicator) mesaConnIndicator.textContent = '🔴 Sin conexión';
 }
 
 function publicarMesaPose(mesaId) {
