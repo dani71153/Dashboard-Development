@@ -1272,10 +1272,141 @@ input[type="number"] {
   margin-bottom: var(--spacing-lg);
 }
 
+.menu-mesa-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.mesa-angle-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mesa-odom-bar {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.mesa-yaw-bar {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
 .menu-options {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+}
+
+.menu-mesa-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.menu-mesa-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.menu-mesa-aside {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.menu-mesa-aside h4 {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.menu-mesa-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.mesa-mode-row {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  font-weight: 600;
+}
+
+.mesa-mode-row select {
+  width: 100%;
+}
+
+.menu-mesa-actions button {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: var(--text-light);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.menu-mesa-actions button:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.mesa-log {
+  margin-top: var(--spacing-sm);
+  max-height: 220px;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  background: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.mesa-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.mesa-log-header button {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: var(--text-light);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.mesa-log-header button:hover {
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
 }
 
 .menu-option {
@@ -1392,6 +1523,12 @@ input[type="number"] {
     font-size: 0.98em;
     height: 36px;
     max-width: 100%;
+  }
+}
+
+@media (max-width: 1024px) {
+  .menu-mesa-layout {
+    grid-template-columns: 1fr;
   }
 }
 

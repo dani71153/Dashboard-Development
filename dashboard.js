@@ -2488,6 +2488,7 @@ ros.on('connection', function () {
   startSlamMonitoring();
   startLidarMonitoring();
   startImuTempMonitoring();
+  startMesaIntegration();
   updateCalibracionMonitoring();
   updatePlanoMonitoring();
   updateNavegacionMonitoring();
@@ -2504,6 +2505,7 @@ ros.on('close', function () {
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   stopPlanoMonitoring(true);
+  stopMesaIntegration(true);
   deactivateNavSalidas();
   setSlamIndicator('disconnected', 'SLAMToolbox: Sin conexión');
   setSlamLastUpdate(null);
@@ -2519,6 +2521,7 @@ ros.on('error', function () {
   stopImuTempMonitoring(true);
   stopCalibracionMonitoring(true);
   stopPlanoMonitoring(true);
+  stopMesaIntegration(true);
   deactivateNavSalidas();
   setSlamIndicator('disconnected', 'SLAMToolbox: Error de conexión');
   setSlamLastUpdate(null);
@@ -2673,23 +2676,567 @@ menuNavLinks.forEach(link => {
 showMenuPanel('comida');
 
 const menuMesaInputs = document.querySelectorAll('.menu-mesa-input');
+const menuMesaThetaInputs = document.querySelectorAll('.menu-mesa-theta');
+const menuMesaUnitLabels = document.querySelectorAll('.mesa-angle-unit-label');
+const mesaAngleToggleBtn = document.getElementById('mesa-angle-toggle');
+const mesaAngleUnit = document.getElementById('mesa-angle-unit');
+const mesaEstadoText = document.getElementById('mesa-estado-text');
+const mesaPublishButtons = document.querySelectorAll('.menu-mesa-publicar');
+const mesaClearQueueBtn = document.getElementById('mesa-clear-queue');
+const mesaCancelNavBtn = document.getElementById('mesa-cancel-nav');
+const mesaColaActualEl = document.getElementById('mesa-cola-actual');
+const mesaListadoColasEl = document.getElementById('mesa-listado-colas');
+const mesaLogEl = document.getElementById('mesa-log');
+const mesaPublicarTodasBtn = document.getElementById('mesa-publicar-todas');
+const mesaClearLogBtn = document.getElementById('mesa-clear-log');
+const mesaResetNodeBtn = document.getElementById('mesa-reset-node');
+const mesaModeSelect = document.getElementById('mesa-mode-select');
+const mesaModeApply = document.getElementById('mesa-mode-apply');
+const mesaModoActualEl = document.getElementById('mesa-modo-actual');
+const mesaOdomCrudaEl = document.getElementById('mesa-odom-cruda');
+const mesaOdomMapaEl = document.getElementById('mesa-odom-mapa');
+const mesaOdomDistEl = document.getElementById('mesa-odom-dist');
+const mesaYawRobotEl = document.getElementById('mesa-yaw-robot');
+const mesaYawObjetivoEl = document.getElementById('mesa-yaw-objetivo');
+const mesaYawRawEl = document.getElementById('mesa-yaw-raw');
+const mesaYawDiffEl = document.getElementById('mesa-yaw-diff');
+
+let mesaAngleMode = 'deg'; // 'deg' | 'rad'
+let mesaActiveMode = 'pedido'; // pedido | entrega | pago | auto
+let mesaEstadoSub = null;
+let mesaClearQueuePub = null;
+let mesaResetPub = null;
+let mesaModoPub = null;
+let mesaEntradasPedidoPub = null;
+let mesaEntradasEntregaPub = null;
+let mesaEntradasPagoPub = null;
+let mesaColaActualSub = null;
+let mesaListadoColasSub = null;
+let mesaOdomCrudaSub = null;
+let mesaOdomMapaSub = null;
+let mesaOdomDistSub = null;
+let mesaYawRobotSub = null;
+let mesaYawObjetivoSub = null;
+let mesaYawRawSub = null;
+let mesaYawDiffSub = null;
+
+function ensureMesaRosObjects() {
+  const rosConn = window.ros && window.ros.isConnected;
+  if (!rosConn) return false;
+  if (!mesaModoPub) {
+    mesaModoPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/controlador_mesas/cambiar_modo',
+      messageType: 'std_msgs/msg/String'
+    });
+  }
+  if (!mesaEntradasPedidoPub) {
+    mesaEntradasPedidoPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/entradas_pedidos',
+      messageType: 'geometry_msgs/msg/PoseStamped'
+    });
+  }
+  if (!mesaEntradasEntregaPub) {
+    mesaEntradasEntregaPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/entradas_entregas',
+      messageType: 'geometry_msgs/msg/PoseStamped'
+    });
+  }
+  if (!mesaEntradasPagoPub) {
+    mesaEntradasPagoPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/entradas_pagos',
+      messageType: 'geometry_msgs/msg/PoseStamped'
+    });
+  }
+  if (!mesaClearQueuePub) {
+    mesaClearQueuePub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/controlador_mesas/limpiar_cola',
+      messageType: 'std_msgs/msg/String'
+    });
+  }
+  if (!mesaResetPub) {
+    mesaResetPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/controlador_mesas/reiniciar',
+      messageType: 'std_msgs/msg/String'
+    });
+  }
+  return true;
+}
+
+function formatThetaValue(value) {
+  if (!Number.isFinite(value)) return '—';
+  return mesaAngleMode === 'deg' ? value.toFixed(1) : value.toFixed(3);
+}
+
+function formatThetaLabel(value) {
+  if (!Number.isFinite(value)) return '—';
+  const suffix = mesaAngleMode === 'deg' ? '°' : ' rad';
+  return `${formatThetaValue(value)}${suffix}`;
+}
+
+function syncMesaAngleUnits() {
+  const symbol = mesaAngleMode === 'deg' ? '°' : 'rad';
+  menuMesaUnitLabels.forEach(el => { el.textContent = symbol; });
+  if (mesaAngleUnit) mesaAngleUnit.textContent = symbol;
+  if (mesaAngleToggleBtn) {
+    mesaAngleToggleBtn.textContent = mesaAngleMode === 'deg' ? 'Usar radianes' : 'Usar grados';
+  }
+}
+
+function convertThetaInputs(targetMode) {
+  if (targetMode === mesaAngleMode) return;
+  menuMesaThetaInputs.forEach(input => {
+    const raw = Number.parseFloat(input.value);
+    if (!Number.isFinite(raw)) return;
+    const converted = targetMode === 'deg' ? radToDeg(raw) : degToRad(raw);
+    input.value = formatThetaValue(converted);
+  });
+  mesaAngleMode = targetMode;
+  syncMesaAngleUnits();
+  menuMesaInputs.forEach(input => updateMesaLabel(input.dataset.mesa));
+}
+
+if (mesaAngleToggleBtn) {
+  mesaAngleToggleBtn.addEventListener('click', () => {
+    const nextMode = mesaAngleMode === 'deg' ? 'rad' : 'deg';
+    convertThetaInputs(nextMode);
+  });
+}
+syncMesaAngleUnits();
 
 function updateMesaLabel(mesaId) {
   const xInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="x"]`);
   const yInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="y"]`);
+  const thetaInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="theta"]`);
   const label = document.querySelector(`.menu-mesa-current[data-mesa="${mesaId}"]`);
-  if (!label || !xInput || !yInput) return;
+  if (!label || !xInput || !yInput || !thetaInput) return;
 
   const xVal = Number.parseFloat(xInput.value);
   const yVal = Number.parseFloat(yInput.value);
+  const thetaVal = Number.parseFloat(thetaInput.value);
   const format = value => (Number.isFinite(value) ? value.toFixed(2) : '—');
-  label.textContent = `Actual: X=${format(xVal)}, Y=${format(yVal)}`;
+  label.textContent = `Actual: X=${format(xVal)}, Y=${format(yVal)}, Theta=${formatThetaLabel(thetaVal)}`;
 }
 
 menuMesaInputs.forEach(input => {
   input.addEventListener('input', () => updateMesaLabel(input.dataset.mesa));
   updateMesaLabel(input.dataset.mesa);
 });
+
+function mesaLogPush(source, text) {
+  if (!mesaLogEl) return;
+  const now = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.textContent = `[${now}] ${source}: ${text || '—'}`;
+  mesaLogEl.prepend(entry);
+  while (mesaLogEl.childElementCount > 20) {
+    mesaLogEl.removeChild(mesaLogEl.lastElementChild);
+  }
+}
+
+function mesaLogClear() {
+  if (!mesaLogEl) return;
+  mesaLogEl.textContent = '';
+  mesaLogPush('log', 'Se limpió el registro');
+}
+
+function startMesaIntegration() {
+  if (!ros || !ros.isConnected) return;
+  ensureMesaRosObjects();
+  if (!mesaEstadoSub) {
+    mesaEstadoSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/estado',
+      messageType: 'std_msgs/msg/String',
+      throttle_rate: 0,
+      queue_length: 1
+    });
+    mesaEstadoSub.subscribe(msg => {
+      if (mesaEstadoText) {
+        mesaEstadoText.textContent = msg?.data || '—';
+      }
+      mesaLogPush('estado', msg?.data || '—');
+    });
+  }
+  if (!mesaEntradasPub) {
+    mesaEntradasPub = new ROSLIB.Topic({
+      ros,
+      name: '/entradas_mesas',
+      messageType: 'geometry_msgs/msg/PoseStamped'
+    });
+  }
+  if (mesaEstadoText && !mesaEstadoText.textContent) {
+    mesaEstadoText.textContent = 'Esperando estado...';
+  }
+  if (!mesaClearQueuePub) {
+    mesaClearQueuePub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/limpiar_cola',
+      messageType: 'std_msgs/msg/String'
+    });
+  }
+  if (!mesaResetPub) {
+    mesaResetPub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/reiniciar',
+      messageType: 'std_msgs/msg/String'
+    });
+  }
+  if (!mesaColaActualSub) {
+    mesaColaActualSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/cola_actual',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaColaActualSub.subscribe(msg => {
+      if (mesaColaActualEl) mesaColaActualEl.textContent = msg?.data || '—';
+      mesaLogPush('cola_actual', msg?.data || '—');
+    });
+  }
+  if (!mesaListadoColasSub) {
+    mesaListadoColasSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/listado_colas',
+      messageType: 'std_msgs/msg/String',
+      queue_length: 1
+    });
+    mesaListadoColasSub.subscribe(msg => {
+      if (mesaListadoColasEl) mesaListadoColasEl.textContent = msg?.data || '—';
+      mesaLogPush('listado_colas', msg?.data || '—');
+    });
+  }
+  if (!mesaOdomCrudaSub) {
+    mesaOdomCrudaSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/odom_recibida',
+      messageType: 'geometry_msgs/msg/PoseStamped',
+      queue_length: 1
+    });
+    mesaOdomCrudaSub.subscribe(msg => {
+      if (mesaOdomCrudaEl) {
+        const x = Number(msg?.pose?.position?.x ?? NaN);
+        const y = Number(msg?.pose?.position?.y ?? NaN);
+        mesaOdomCrudaEl.textContent = Number.isFinite(x) && Number.isFinite(y)
+          ? `x=${x.toFixed(3)}, y=${y.toFixed(3)}`
+          : '—';
+      }
+    });
+  }
+  if (!mesaOdomMapaSub) {
+    mesaOdomMapaSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/odom_en_mapa',
+      messageType: 'geometry_msgs/msg/PoseStamped',
+      queue_length: 1
+    });
+    mesaOdomMapaSub.subscribe(msg => {
+      if (mesaOdomMapaEl) {
+        const x = Number(msg?.pose?.position?.x ?? NaN);
+        const y = Number(msg?.pose?.position?.y ?? NaN);
+        mesaOdomMapaEl.textContent = Number.isFinite(x) && Number.isFinite(y)
+          ? `x=${x.toFixed(3)}, y=${y.toFixed(3)}`
+          : '—';
+      }
+    });
+  }
+  if (!mesaOdomDistSub) {
+    mesaOdomDistSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/distancia_objetivo',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaOdomDistSub.subscribe(msg => {
+      if (mesaOdomDistEl) {
+        const d = Number(msg?.data ?? NaN);
+        mesaOdomDistEl.textContent = Number.isFinite(d) ? `${d.toFixed(3)} m` : '—';
+      }
+    });
+  }
+  if (!mesaYawRobotSub) {
+    mesaYawRobotSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/yaw_robot',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaYawRobotSub.subscribe(msg => {
+      if (mesaYawRobotEl) {
+        const v = Number(msg?.data ?? NaN);
+        mesaYawRobotEl.textContent = Number.isFinite(v) ? `${v.toFixed(3)} rad` : '—';
+      }
+    });
+  }
+  if (!mesaYawObjetivoSub) {
+    mesaYawObjetivoSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/yaw_objetivo',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaYawObjetivoSub.subscribe(msg => {
+      if (mesaYawObjetivoEl) {
+        const v = Number(msg?.data ?? NaN);
+        mesaYawObjetivoEl.textContent = Number.isFinite(v) ? `${v.toFixed(3)} rad` : '—';
+      }
+    });
+  }
+  if (!mesaYawRawSub) {
+    mesaYawRawSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/yaw_raw_odom',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaYawRawSub.subscribe(msg => {
+      if (mesaYawRawEl) {
+        const v = Number(msg?.data ?? NaN);
+        mesaYawRawEl.textContent = Number.isFinite(v) ? `${v.toFixed(3)} rad` : '—';
+      }
+    });
+  }
+  if (!mesaYawDiffSub) {
+    mesaYawDiffSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/yaw_diff',
+      messageType: 'std_msgs/msg/Float32',
+      queue_length: 1
+    });
+    mesaYawDiffSub.subscribe(msg => {
+      if (mesaYawDiffEl) {
+        const v = Number(msg?.data ?? NaN);
+        mesaYawDiffEl.textContent = Number.isFinite(v) ? `${v.toFixed(3)} rad` : '—';
+      }
+    });
+  }
+}
+
+function stopMesaIntegration(clear = false) {
+  if (mesaEstadoSub) {
+    mesaEstadoSub.unsubscribe();
+    mesaEstadoSub = null;
+  }
+  if (mesaEntradasPub) {
+    if (typeof mesaEntradasPub.unadvertise === 'function') {
+      mesaEntradasPub.unadvertise();
+    }
+    mesaEntradasPub = null;
+  }
+  if (mesaClearQueuePub) {
+    if (typeof mesaClearQueuePub.unadvertise === 'function') {
+      mesaClearQueuePub.unadvertise();
+    }
+    mesaClearQueuePub = null;
+  }
+  if (mesaResetPub) {
+    if (typeof mesaResetPub.unadvertise === 'function') {
+      mesaResetPub.unadvertise();
+    }
+    mesaResetPub = null;
+  }
+  if (mesaModoPub) {
+    if (typeof mesaModoPub.unadvertise === 'function') {
+      mesaModoPub.unadvertise();
+    }
+    mesaModoPub = null;
+  }
+  if (mesaEntradasPedidoPub) {
+    if (typeof mesaEntradasPedidoPub.unadvertise === 'function') mesaEntradasPedidoPub.unadvertise();
+    mesaEntradasPedidoPub = null;
+  }
+  if (mesaEntradasEntregaPub) {
+    if (typeof mesaEntradasEntregaPub.unadvertise === 'function') mesaEntradasEntregaPub.unadvertise();
+    mesaEntradasEntregaPub = null;
+  }
+  if (mesaEntradasPagoPub) {
+    if (typeof mesaEntradasPagoPub.unadvertise === 'function') mesaEntradasPagoPub.unadvertise();
+    mesaEntradasPagoPub = null;
+  }
+  if (mesaColaActualSub) {
+    mesaColaActualSub.unsubscribe();
+    mesaColaActualSub = null;
+  }
+  if (mesaListadoColasSub) {
+    mesaListadoColasSub.unsubscribe();
+    mesaListadoColasSub = null;
+  }
+  if (mesaOdomCrudaSub) {
+    mesaOdomCrudaSub.unsubscribe();
+    mesaOdomCrudaSub = null;
+  }
+  if (mesaOdomMapaSub) {
+    mesaOdomMapaSub.unsubscribe();
+    mesaOdomMapaSub = null;
+  }
+  if (mesaOdomDistSub) {
+    mesaOdomDistSub.unsubscribe();
+    mesaOdomDistSub = null;
+  }
+  if (mesaYawRobotSub) {
+    mesaYawRobotSub.unsubscribe();
+    mesaYawRobotSub = null;
+  }
+  if (mesaYawObjetivoSub) {
+    mesaYawObjetivoSub.unsubscribe();
+    mesaYawObjetivoSub = null;
+  }
+  if (mesaYawRawSub) {
+    mesaYawRawSub.unsubscribe();
+    mesaYawRawSub = null;
+  }
+  if (mesaYawDiffSub) {
+    mesaYawDiffSub.unsubscribe();
+    mesaYawDiffSub = null;
+  }
+  if (clear && mesaEstadoText) {
+    mesaEstadoText.textContent = 'Sin conexión';
+  }
+  if (clear && mesaModoActualEl) {
+    mesaModoActualEl.textContent = '—';
+  }
+}
+
+function publicarMesaPose(mesaId) {
+  if (!ensureMesaRosObjects()) {
+    if (mesaEstadoText) mesaEstadoText.textContent = 'Sin conexión a ROS para publicar';
+    return;
+  }
+  const xInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="x"]`);
+  const yInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="y"]`);
+  const thetaInput = document.querySelector(`.menu-mesa-input[data-mesa="${mesaId}"][data-axis="theta"]`);
+  if (!xInput || !yInput || !thetaInput) return;
+
+  const x = Number.parseFloat(xInput.value);
+  const y = Number.parseFloat(yInput.value);
+  const thetaRaw = Number.parseFloat(thetaInput.value);
+  const thetaRad = mesaAngleMode === 'deg' ? degToRad(thetaRaw) : thetaRaw;
+
+  const targetMode = mesaActiveMode === 'auto' ? 'pedido' : mesaActiveMode;
+  const publisher = targetMode === 'entrega'
+    ? mesaEntradasEntregaPub
+    : targetMode === 'pago'
+      ? mesaEntradasPagoPub
+      : mesaEntradasPedidoPub;
+  if (!publisher) {
+    mesaLogPush('publicar', 'Sin publisher disponible para el modo seleccionado');
+    return;
+  }
+
+  const thetaSafe = Number.isFinite(thetaRad) ? thetaRad : 0;
+  const now = Date.now();
+  const half = thetaSafe / 2;
+  const msg = {
+    header: {
+      stamp: {
+        sec: Math.floor(now / 1000),
+        nanosec: (now % 1000) * 1e6
+      },
+      frame_id: 'map'
+    },
+    pose: {
+      position: {
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0,
+        z: 0
+      },
+      orientation: {
+        x: 0,
+        y: 0,
+        z: Math.sin(half),
+        w: Math.cos(half)
+      }
+    }
+  };
+
+  publisher.publish(msg);
+
+  if (mesaEstadoText) {
+    const thetaLabel = mesaAngleMode === 'deg'
+      ? `${formatThetaValue(thetaRaw)}°`
+      : `${formatThetaValue(thetaRad)} rad`;
+    mesaEstadoText.textContent = `Enviada mesa ${mesaId} (${targetMode}): x=${msg.pose.position.x.toFixed(2)}, y=${msg.pose.position.y.toFixed(2)}, θ=${thetaLabel}`;
+  }
+  const modoLog = mesaActiveMode === 'auto'
+    ? 'auto → enviado a pedidos'
+    : `modo ${mesaActiveMode}`;
+  mesaLogPush('publicar', `Mesa ${mesaId} (${modoLog})`);
+}
+
+mesaPublishButtons.forEach(btn => {
+  btn.addEventListener('click', () => publicarMesaPose(btn.dataset.mesa));
+});
+
+function publishAllMesas() {
+  const ids = new Set();
+  mesaPublishButtons.forEach(btn => ids.add(btn.dataset.mesa));
+  ids.forEach(id => publicarMesaPose(id));
+  mesaLogPush('publicar_todas', `Enviadas mesas: ${Array.from(ids).join(', ')}`);
+}
+
+if (mesaPublicarTodasBtn) {
+  mesaPublicarTodasBtn.addEventListener('click', publishAllMesas);
+}
+
+if (mesaClearLogBtn) {
+  mesaClearLogBtn.addEventListener('click', mesaLogClear);
+}
+
+function publishClearQueue(reason) {
+  if (!mesaClearQueuePub || !ros || !ros.isConnected) {
+    mesaLogPush('limpiar_cola', 'Sin conexión a ROS');
+    return;
+  }
+  const modo = mesaActiveMode;
+  mesaClearQueuePub.publish({ data: reason || 'clear' });
+  mesaLogPush('limpiar_cola', `${reason || 'clear'} (modo ${modo})`);
+}
+
+if (mesaClearQueueBtn) {
+  mesaClearQueueBtn.addEventListener('click', () => publishClearQueue('limpiar cola manual'));
+}
+if (mesaCancelNavBtn) {
+  mesaCancelNavBtn.addEventListener('click', () => publishClearQueue('cancelar navegación'));
+}
+if (mesaResetNodeBtn) {
+  mesaResetNodeBtn.addEventListener('click', () => {
+    if (!ensureMesaRosObjects()) {
+      mesaLogPush('reiniciar', 'Sin conexión a ROS');
+      return;
+    }
+    mesaResetPub.publish({ data: 'reiniciar' });
+    mesaLogPush('reiniciar', 'Comando enviado');
+  });
+}
+
+function setMesaMode(mode, emit = false) {
+  if (!mode) return;
+  mesaActiveMode = mode;
+  if (mesaModoActualEl) mesaModoActualEl.textContent = mode;
+  if (mesaModeSelect && mesaModeSelect.value !== mode) {
+    mesaModeSelect.value = mode;
+  }
+  if (emit) {
+    const canPublish = ensureMesaRosObjects();
+    if (!canPublish) {
+      mesaLogPush('modo', `Modo fijado localmente (${mode}). Conecta ROS para enviarlo.`);
+      return;
+    }
+    mesaModoPub.publish({ data: mode });
+    mesaLogPush('modo', `Enviado modo ${mode}`);
+  }
+}
+
+if (mesaModeApply && mesaModeSelect) {
+  mesaModeApply.addEventListener('click', () => setMesaMode(mesaModeSelect.value, true));
+}
+
+setMesaMode(mesaModeSelect ? mesaModeSelect.value : 'pedido', false);
 
 if (dynamicMapButton) {
   dynamicMapButton.addEventListener('click', () => requestDynamicMap(dynamicMapButton));

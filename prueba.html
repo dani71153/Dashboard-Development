@@ -861,7 +861,58 @@ les -->
 
         <section class="menu-panel" id="menu-mesa">
           <h3>Mesa</h3>
-          <div class="menu-options">
+          <div class="menu-mesa-toolbar">
+            <div class="mesa-angle-toggle">
+              <span>Theta en</span>
+              <button type="button" id="mesa-angle-toggle">Usar radianes</button>
+              <span class="mesa-angle-unit" id="mesa-angle-unit">°</span>
+            </div>
+            <div class="mesa-odom-bar">
+              <span><strong>Odom cruda:</strong> <span id="mesa-odom-cruda">—</span></span>
+              <span><strong>Odom en mapa:</strong> <span id="mesa-odom-mapa">—</span></span>
+              <span><strong>Distancia:</strong> <span id="mesa-odom-dist">—</span></span>
+            </div>
+            <div class="mesa-yaw-bar">
+              <span><strong>Yaw robot:</strong> <span id="mesa-yaw-robot">—</span></span>
+              <span><strong>Yaw objetivo:</strong> <span id="mesa-yaw-objetivo">—</span></span>
+              <span><strong>Yaw odom cruda:</strong> <span id="mesa-yaw-raw">—</span></span>
+              <span><strong>Yaw diff:</strong> <span id="mesa-yaw-diff">—</span></span>
+            </div>
+            <div class="mesa-estado">
+              <span>Estado controlador:</span>
+              <span id="mesa-estado-text">Sin datos</span>
+            </div>
+          </div>
+          <div class="menu-mesa-layout">
+            <div class="menu-mesa-left">
+              <aside class="menu-mesa-aside">
+                <h4>Acciones</h4>
+                <div class="menu-mesa-actions">
+                  <button type="button" id="mesa-clear-queue">Limpiar cola</button>
+                  <button type="button" id="mesa-cancel-nav">Cancelar navegación</button>
+                  <button type="button" id="mesa-reset-node">Reiniciar nodo</button>
+                </div>
+              </aside>
+              <aside class="menu-mesa-aside">
+                <h4>Acción rápida</h4>
+                <div class="menu-mesa-actions">
+                  <button type="button" id="mesa-publicar-todas">Publicar todas las mesas</button>
+                </div>
+              </aside>
+              <aside class="menu-mesa-aside">
+              <h4>Estado</h4>
+              <div class="menu-mesa-log">
+                <div><strong>Mesa actual:</strong> <span id="mesa-cola-actual">—</span></div>
+                <div><strong>Cola completa:</strong> <span id="mesa-listado-colas">—</span></div>
+                <div class="mesa-log-header">
+                  <strong>Eventos:</strong>
+                  <button type="button" id="mesa-clear-log">Limpiar log</button>
+                </div>
+                <div id="mesa-log" class="mesa-log"></div>
+              </div>
+            </aside>
+            </div>
+            <div class="menu-options">
             <div class="menu-option menu-mesa-card">
               <div class="menu-option-content">
                 <span class="menu-option-name">Mesa 1</span>
@@ -876,7 +927,12 @@ les -->
                   <span>Y (m)</span>
                   <input type="number" step="0.01" value="0" data-mesa="1" data-axis="y" class="menu-mesa-input">
                 </label>
+                <label>
+                  <span>Theta (<span class="mesa-angle-unit-label">°</span>)</span>
+                  <input type="number" step="0.01" value="0" data-mesa="1" data-axis="theta" class="menu-mesa-input menu-mesa-theta">
+                </label>
               </div>
+              <button type="button" class="menu-mesa-publicar" data-mesa="1">Publicar mesa 1</button>
             </div>
             <div class="menu-option menu-mesa-card">
               <div class="menu-option-content">
@@ -892,7 +948,12 @@ les -->
                   <span>Y (m)</span>
                   <input type="number" step="0.01" value="0.5" data-mesa="2" data-axis="y" class="menu-mesa-input">
                 </label>
+                <label>
+                  <span>Theta (<span class="mesa-angle-unit-label">°</span>)</span>
+                  <input type="number" step="0.01" value="0" data-mesa="2" data-axis="theta" class="menu-mesa-input menu-mesa-theta">
+                </label>
               </div>
+              <button type="button" class="menu-mesa-publicar" data-mesa="2">Publicar mesa 2</button>
             </div>
             <div class="menu-option menu-mesa-card">
               <div class="menu-option-content">
@@ -908,7 +969,13 @@ les -->
                   <span>Y (m)</span>
                   <input type="number" step="0.01" value="1.2" data-mesa="3" data-axis="y" class="menu-mesa-input">
                 </label>
+                <label>
+                  <span>Theta (<span class="mesa-angle-unit-label">°</span>)</span>
+                  <input type="number" step="0.01" value="0" data-mesa="3" data-axis="theta" class="menu-mesa-input menu-mesa-theta">
+                </label>
               </div>
+              <button type="button" class="menu-mesa-publicar" data-mesa="3">Publicar mesa 3</button>
+            </div>
             </div>
           </div>
         </section>
