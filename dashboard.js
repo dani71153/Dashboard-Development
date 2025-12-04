@@ -2478,7 +2478,7 @@ function executeSlamServiceButton(button) {
 }
 
 // EXPONER la misma instancia al resto del dashboard
-window.ros = new ROSLIB.Ros({ url: 'ws://192.168.0.162:9090' });
+window.ros = new ROSLIB.Ros({ url: 'ws://192.168.137.253:9090' });
 const ros = window.ros;
 
 // Eventos de conexión
@@ -2693,6 +2693,8 @@ const mesaEstadoText = document.getElementById('mesa-estado-text');
 const mesaPublishButtons = document.querySelectorAll('.menu-mesa-publicar');
 const mesaClearQueueBtn = document.getElementById('mesa-clear-queue');
 const mesaCancelNavBtn = document.getElementById('mesa-cancel-nav');
+const mesaAutorizarEntregaBtn = document.getElementById('mesa-authorize-entrega');
+const mesaPagarBtn = document.getElementById('mesa-pagar');
 const mesaColaActualEl = document.getElementById('mesa-cola-actual');
 const mesaListadoColasEl = document.getElementById('mesa-listado-colas');
 const mesaConnIndicator = document.getElementById('mesa-conn-indicator');
@@ -2703,6 +2705,9 @@ const mesaYawRobotEl = document.getElementById('mesa-yaw-robot');
 const mesaYawObjetivoEl = document.getElementById('mesa-yaw-objetivo');
 const mesaYawRawEl = document.getElementById('mesa-yaw-raw');
 const mesaYawDiffEl = document.getElementById('mesa-yaw-diff');
+const mesaOrigenEstadoEl = document.getElementById('mesa-origen-estado');
+const mesaOrigenGuardadoEl = document.getElementById('mesa-origen-guardado');
+const mesaOrigenDotEl = document.getElementById('mesa-origen-dot');
 const mesaValidacionEl = document.getElementById('mesa-validacion-estado');
 const mesaObjetivosDescartadosEl = document.getElementById('mesa-objetivos-descartados');
 const mesaObjetivosDescartadosListaEl = document.getElementById('mesa-objetivos-descartados-lista');
@@ -2721,6 +2726,8 @@ let mesaEstadoSub = null;
 let mesaClearQueuePub = null;
 let mesaResetPub = null;
 let mesaModoPub = null;
+let mesaAutorizarEntregaPub = null;
+let mesaPagarPub = null;
 let mesaEntradasPub = null;
 let mesaEntradasPedidoPub = null;
 let mesaEntradasEntregaPub = null;
@@ -2736,6 +2743,8 @@ let mesaYawRobotSub = null;
 let mesaYawObjetivoSub = null;
 let mesaYawRawSub = null;
 let mesaYawDiffSub = null;
+let mesaOrigenCheckSub = null;
+let mesaOrigenGuardadoSub = null;
 let mesaValidacionSub = null;
 let mesaObjetivosDescartadosSub = null;
 let mesaObjetivosDescartadosListaSub = null;
@@ -2784,6 +2793,20 @@ function ensureMesaRosObjects() {
       ros: window.ros,
       name: '/controlador_mesas/reiniciar',
       messageType: 'std_msgs/msg/String'
+    });
+  }
+  if (!mesaAutorizarEntregaPub) {
+    mesaAutorizarEntregaPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/controlador_mesas/autorizar_entrega',
+      messageType: 'std_msgs/msg/Bool'
+    });
+  }
+  if (!mesaPagarPub) {
+    mesaPagarPub = new ROSLIB.Topic({
+      ros: window.ros,
+      name: '/controlador_mesas/pagado',
+      messageType: 'std_msgs/msg/Bool'
     });
   }
   return true;
@@ -2849,6 +2872,28 @@ menuMesaInputs.forEach(input => {
   updateMesaLabel(input.dataset.mesa);
 });
 
+function setMesaOrigenState(state) {
+  let label = 'Esperando…';
+  if (state === true) label = 'En origen';
+  if (state === false) label = 'Fuera de origen';
+  if (mesaOrigenEstadoEl) mesaOrigenEstadoEl.textContent = label;
+  if (mesaOrigenDotEl) {
+    mesaOrigenDotEl.classList.remove('mesa-origin-dot-on', 'mesa-origin-dot-off', 'mesa-origin-dot-idle');
+    if (state === true) {
+      mesaOrigenDotEl.classList.add('mesa-origin-dot-on');
+    } else if (state === false) {
+      mesaOrigenDotEl.classList.add('mesa-origin-dot-off');
+    } else {
+      mesaOrigenDotEl.classList.add('mesa-origin-dot-idle');
+    }
+  }
+}
+
+function resetMesaOrigenUI() {
+  setMesaOrigenState(null);
+  if (mesaOrigenGuardadoEl) mesaOrigenGuardadoEl.textContent = '—';
+}
+
 function mesaLogPush(source, text) {
   if (!mesaLogEl) return;
   const now = new Date().toLocaleTimeString();
@@ -2866,6 +2911,31 @@ function mesaLogClear() {
   mesaLogPush('log', 'Se limpió el registro');
 }
 
+function updateAutorizarEntregaButton() {
+  if (!mesaAutorizarEntregaBtn) return;
+  const isEntrega = mesaActiveMode === 'entrega';
+  mesaAutorizarEntregaBtn.disabled = !isEntrega;
+  mesaAutorizarEntregaBtn.textContent = isEntrega
+    ? 'Autorizar entrega'
+    : 'Autorizar entrega (solo en modo entrega)';
+  mesaAutorizarEntregaBtn.style.backgroundColor = isEntrega ? '#2e8b57' : '#666';
+  mesaAutorizarEntregaBtn.style.color = '#fff';
+}
+
+function updatePagarButton() {
+  if (!mesaPagarBtn) return;
+  const isPago = mesaActiveMode === 'pago';
+  mesaPagarBtn.disabled = !isPago;
+  mesaPagarBtn.textContent = isPago ? 'Pagar' : 'Pagar (solo en modo pago)';
+  mesaPagarBtn.style.backgroundColor = isPago ? '#2e8b57' : '#666';
+  mesaPagarBtn.style.color = '#fff';
+}
+
+function updateMesaActionButtons() {
+  updateAutorizarEntregaButton();
+  updatePagarButton();
+}
+
 function startMesaIntegration() {
   if (!ros || !ros.isConnected) return;
   ensureMesaRosObjects();
@@ -2879,6 +2949,9 @@ function startMesaIntegration() {
   if (mesaYawObjetivoEl) mesaYawObjetivoEl.textContent = 'Esperando…';
   if (mesaYawRawEl) mesaYawRawEl.textContent = 'Esperando…';
   if (mesaYawDiffEl) mesaYawDiffEl.textContent = 'Esperando…';
+  resetMesaOrigenUI();
+  if (mesaOrigenEstadoEl) mesaOrigenEstadoEl.textContent = 'Esperando…';
+  if (mesaOrigenGuardadoEl) mesaOrigenGuardadoEl.textContent = 'Esperando…';
   if (mesaValidacionEl) mesaValidacionEl.textContent = 'Esperando…';
   if (mesaObjetivosDescartadosEl) mesaObjetivosDescartadosEl.textContent = 'Esperando…';
   if (mesaObjetivosDescartadosListaEl) mesaObjetivosDescartadosListaEl.textContent = 'Esperando…';
@@ -2914,7 +2987,12 @@ function startMesaIntegration() {
       queue_length: 1
     });
     mesaModoActualSub.subscribe(msg => {
-      if (mesaModoActualEl) mesaModoActualEl.textContent = msg?.data || '—';
+      const mode = msg?.data || '—';
+      if (mesaModoActualEl) mesaModoActualEl.textContent = mode;
+      if (mode === 'pedido' || mode === 'entrega' || mode === 'pago' || mode === 'auto') {
+        mesaActiveMode = mode;
+        updateMesaActionButtons();
+      }
     });
   }
   if (!mesaHeartbeatSub) {
@@ -3085,6 +3163,36 @@ function startMesaIntegration() {
       }
     });
   }
+  if (!mesaOrigenCheckSub) {
+    mesaOrigenCheckSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/verificacion_del_origen',
+      messageType: 'std_msgs/msg/Bool',
+      queue_length: 1
+    });
+    mesaOrigenCheckSub.subscribe(msg => {
+      setMesaOrigenState(msg?.data === true);
+    });
+  }
+  if (!mesaOrigenGuardadoSub) {
+    mesaOrigenGuardadoSub = new ROSLIB.Topic({
+      ros,
+      name: '/controlador_mesas/origen_guardado',
+      messageType: 'geometry_msgs/msg/Pose2D',
+      queue_length: 1
+    });
+    mesaOrigenGuardadoSub.subscribe(msg => {
+      if (!mesaOrigenGuardadoEl) return;
+      const x = Number(msg?.x ?? NaN);
+      const y = Number(msg?.y ?? NaN);
+      const theta = Number(msg?.theta ?? NaN);
+      if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(theta)) {
+        mesaOrigenGuardadoEl.textContent = `x=${x.toFixed(3)}, y=${y.toFixed(3)}, θ=${theta.toFixed(3)} rad`;
+      } else {
+        mesaOrigenGuardadoEl.textContent = '—';
+      }
+    });
+  }
   if (!mesaValidacionSub) {
     mesaValidacionSub = new ROSLIB.Topic({
       ros,
@@ -3159,6 +3267,18 @@ function stopMesaIntegration(clear = false) {
     }
     mesaResetPub = null;
   }
+  if (mesaAutorizarEntregaPub) {
+    if (typeof mesaAutorizarEntregaPub.unadvertise === 'function') {
+      mesaAutorizarEntregaPub.unadvertise();
+    }
+    mesaAutorizarEntregaPub = null;
+  }
+  if (mesaPagarPub) {
+    if (typeof mesaPagarPub.unadvertise === 'function') {
+      mesaPagarPub.unadvertise();
+    }
+    mesaPagarPub = null;
+  }
   if (mesaModoPub) {
     if (typeof mesaModoPub.unadvertise === 'function') {
       mesaModoPub.unadvertise();
@@ -3221,6 +3341,14 @@ function stopMesaIntegration(clear = false) {
     mesaYawDiffSub.unsubscribe();
     mesaYawDiffSub = null;
   }
+  if (mesaOrigenCheckSub) {
+    mesaOrigenCheckSub.unsubscribe();
+    mesaOrigenCheckSub = null;
+  }
+  if (mesaOrigenGuardadoSub) {
+    mesaOrigenGuardadoSub.unsubscribe();
+    mesaOrigenGuardadoSub = null;
+  }
   if (mesaValidacionSub) {
     mesaValidacionSub.unsubscribe();
     mesaValidacionSub = null;
@@ -3256,11 +3384,22 @@ function stopMesaIntegration(clear = false) {
   if (clear && mesaYawObjetivoEl) mesaYawObjetivoEl.textContent = '—';
   if (clear && mesaYawRawEl) mesaYawRawEl.textContent = '—';
   if (clear && mesaYawDiffEl) mesaYawDiffEl.textContent = '—';
+  if (clear) resetMesaOrigenUI();
   if (clear && mesaValidacionEl) mesaValidacionEl.textContent = '—';
   if (clear && mesaObjetivosDescartadosEl) mesaObjetivosDescartadosEl.textContent = '—';
   if (clear && mesaObjetivosDescartadosListaEl) mesaObjetivosDescartadosListaEl.textContent = '—';
   if (clear && mesaOdomTimeoutEl) mesaOdomTimeoutEl.textContent = '—';
   if (clear && mesaConnIndicator) mesaConnIndicator.textContent = '🔴 Sin conexión';
+  if (clear && mesaAutorizarEntregaBtn) {
+    mesaAutorizarEntregaBtn.disabled = true;
+    mesaAutorizarEntregaBtn.style.backgroundColor = '#666';
+    mesaAutorizarEntregaBtn.style.color = '#fff';
+  }
+  if (clear && mesaPagarBtn) {
+    mesaPagarBtn.disabled = true;
+    mesaPagarBtn.style.backgroundColor = '#666';
+    mesaPagarBtn.style.color = '#fff';
+  }
 }
 
 function publicarMesaPose(mesaId) {
@@ -3382,6 +3521,7 @@ function setMesaMode(mode, emit = false) {
   if (mesaModeSelect && mesaModeSelect.value !== mode) {
     mesaModeSelect.value = mode;
   }
+  updateMesaActionButtons();
   if (emit) {
     const canPublish = ensureMesaRosObjects();
     if (!canPublish) {
@@ -3398,6 +3538,34 @@ if (mesaModeApply && mesaModeSelect) {
 }
 
 setMesaMode(mesaModeSelect ? mesaModeSelect.value : 'pedido', false);
+
+if (mesaAutorizarEntregaBtn || mesaPagarBtn) {
+  updateMesaActionButtons();
+}
+
+if (mesaAutorizarEntregaBtn) {
+  mesaAutorizarEntregaBtn.addEventListener('click', () => {
+    if (!ensureMesaRosObjects()) {
+      mesaLogPush('autorizar', 'Sin conexión a ROS');
+      return;
+    }
+    if (mesaAutorizarEntregaBtn.disabled) return;
+    mesaAutorizarEntregaPub.publish({ data: true });
+    mesaLogPush('autorizar', 'Autorización de entrega enviada');
+  });
+}
+
+if (mesaPagarBtn) {
+  mesaPagarBtn.addEventListener('click', () => {
+    if (!ensureMesaRosObjects()) {
+      mesaLogPush('pago', 'Sin conexión a ROS');
+      return;
+    }
+    if (mesaPagarBtn.disabled) return;
+    mesaPagarPub.publish({ data: true });
+    mesaLogPush('pago', 'Pago confirmado enviado');
+  });
+}
 
 if (dynamicMapButton) {
   dynamicMapButton.addEventListener('click', () => requestDynamicMap(dynamicMapButton));

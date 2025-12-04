@@ -1272,12 +1272,116 @@ input[type="number"] {
   margin-bottom: var(--spacing-lg);
 }
 
+.menu-mesa-headrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.mesa-origin-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-subtle);
+  font-size: 0.9rem;
+}
+
+.mesa-origin-inline-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.mesa-origin-inline-state {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mesa-origin-inline-guardado {
+  color: var(--text-secondary);
+}
+
 .menu-mesa-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-lg);
   flex-wrap: wrap;
+}
+
+.mesa-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-sm);
+  font-size: 0.95rem;
+}
+
+.mesa-origin-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-sm);
+  align-items: start;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-subtle);
+}
+
+.mesa-origin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--border-color);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.04);
+  margin-top: 3px;
+}
+
+.mesa-origin-dot-on {
+  background: var(--success-color);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+}
+
+.mesa-origin-dot-off {
+  background: var(--error-color);
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+}
+
+.mesa-origin-dot-idle {
+  background: var(--border-color);
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
+}
+
+.mesa-origin-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.mesa-origin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--border-color);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.04);
+}
+
+.mesa-origin-dot-on {
+  background: var(--success-color);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+}
+
+.mesa-origin-dot-off {
+  background: var(--error-color);
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+}
+
+.mesa-origin-dot-idle {
+  background: var(--border-color);
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
 }
 
 .mesa-angle-toggle {

@@ -7,14 +7,11 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!--Zona de Librerias de Visualizacion 3D-->
-  <!-- Pon esto en el <head> de tu dashboard o en la pestaña/sección 3D -->
 <script src="https://cdn.jsdelivr.net/npm/roslib/build/roslib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three/build/three.min.js"></script>
 <script src=" https://cdn.jsdelivr.net/npm/@inweb/eventemitter2@26.10.6/dist/eventemitter2.min.js "></script>
 <script src="https://cdn.jsdelivr.net/npm/easeljs@1.0.2/lib/easeljs.min.js"></script> <!-- a veces requerido -->
 <script src="https://cdn.jsdelivr.net/npm/ros3d/build/ros3d.min.js"></script>
-<!-- Usa estos CDNs modernos y compatibMotor motor2(M2_RPWM, M2_LPWM, M2_R_EN, M2_L_EN, M2_ENC_A, M2_ENC_B, 0.12, 0.18, 0.002, 25);
-les -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
 <!--Agregamos las librerias de ROS2DJS-->
@@ -860,7 +857,16 @@ les -->
         </section>
 
         <section class="menu-panel" id="menu-mesa">
-          <h3>Mesa <span id="mesa-conn-indicator" class="mesa-conn-indicator">🔴 Sin conexión</span></h3>
+          <div class="menu-mesa-headrow">
+            <h3>Mesa <span id="mesa-conn-indicator" class="mesa-conn-indicator">🔴 Sin conexión</span></h3>
+            <div class="mesa-origin-inline">
+              <span id="mesa-origen-dot" class="mesa-origin-dot mesa-origin-dot-idle" aria-hidden="true"></span>
+              <div class="mesa-origin-inline-text">
+                <span class="mesa-origin-inline-state" id="mesa-origen-estado">Esperando…</span>
+                <span class="mesa-origin-inline-guardado">Origen: <span id="mesa-origen-guardado">Esperando…</span></span>
+              </div>
+            </div>
+          </div>
           <div class="menu-mesa-toolbar">
             <div class="mesa-angle-toggle">
               <span>Theta en</span>
@@ -881,13 +887,15 @@ les -->
                         <option value="pago">Pago</option>
                         <option value="auto">Auto</option>
                       </select>
-                      <button type="button" id="mesa-mode-apply">Cambiar</button>
-                    </label>
-                    <button type="button" id="mesa-clear-queue">Limpiar cola</button>
-                    <button type="button" id="mesa-cancel-nav">Cancelar navegación</button>
-                    <button type="button" id="mesa-reset-node">Reiniciar nodo</button>
-                  </div>
-                </aside>
+                    <button type="button" id="mesa-mode-apply">Cambiar</button>
+                  </label>
+                  <button type="button" id="mesa-clear-queue">Limpiar cola</button>
+                  <button type="button" id="mesa-cancel-nav">Cancelar navegación</button>
+                  <button type="button" id="mesa-reset-node">Reiniciar nodo</button>
+                  <button type="button" id="mesa-authorize-entrega" disabled>Autorizar entrega</button>
+                  <button type="button" id="mesa-pagar" disabled>Pagar</button>
+                </div>
+              </aside>
                 <aside class="menu-mesa-aside">
                   <h4>Acción rápida</h4>
                   <div class="menu-mesa-actions">
